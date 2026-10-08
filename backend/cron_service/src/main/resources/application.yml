@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: cron-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/hr_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:password}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: ${SERVER_PORT:8082}
+
+operation:
+  service:
+    base-url: ${OPERATION_SERVICE_BASE_URL:http://localhost:8081}
+
+internal:
+  api:
+    key: ${INTERNAL_API_KEY:default-secret-key}

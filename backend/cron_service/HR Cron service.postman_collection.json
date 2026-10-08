@@ -1,0 +1,131 @@
+{
+    "info":  {
+                 "_postman_id":  "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+                 "name":  "CRON Service API",
+                 "description":  "Postman Collection for managing and monitoring the Spring Boot CRON Service (Service_4).",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "item":  [
+                 {
+                     "name":  "Job Executions",
+                     "item":  [
+                                  {
+                                      "name":  "Get Job Execution History",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/jobs/history",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8084",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "jobs",
+                                                                               "history"
+                                                                           ]
+                                                              },
+                                                      "description":  "Fetches the recent history of all job executions from the PostgreSQL database."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "Trigger Specific Job Manually",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/jobs/WeeklyReportJob/trigger",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8084",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "jobs",
+                                                                               "WeeklyReportJob",
+                                                                               "trigger"
+                                                                           ]
+                                                              },
+                                                      "description":  "Manually triggers a specific job by name instead of waiting for the cron schedule."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  },
+                                  {
+                                      "name":  "Trigger Monthly Payroll Job",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/v1/jobs/MonthlyPayrollJob/trigger",
+                                                                  "protocol":  "http",
+                                                                  "host":  [
+                                                                               "localhost"
+                                                                           ],
+                                                                  "port":  "8084",
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "v1",
+                                                                               "jobs",
+                                                                               "MonthlyPayrollJob",
+                                                                               "trigger"
+                                                                           ]
+                                                              },
+                                                      "description":  "Manually triggers the MonthlyPayrollJob to generate payroll immediately."
+                                                  },
+                                      "response":  [
+
+                                                   ]
+                                  }
+                              ],
+                     "description":  "Endpoints to monitor and trigger scheduled jobs."
+                 },
+                 {
+                     "request":  {
+                                     "method":  "POST",
+                                     "url":  {
+                                                 "host":  [
+                                                              "{{baseUrl}}"
+                                                          ],
+                                                 "raw":  "{{baseUrl}}/api/v1/jobs/ContractExpiryJob/trigger",
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "jobs",
+                                                              "ContractExpiryJob",
+                                                              "trigger"
+                                                          ]
+                                             },
+                                     "header":  [
+
+                                                ]
+                                 },
+                     "name":  "Trigger Contract Expiry Alerts Job",
+                     "response":  [
+
+                                  ]
+                 }
+             ],
+    "variable":  [
+                     {
+                         "key":  "baseUrl",
+                         "value":  "http://localhost:8084",
+                         "type":  "string"
+                     }
+                 ]
+}

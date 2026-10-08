@@ -1,0 +1,32 @@
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local-dev}
+  application:
+    name: ${SPRING_APPLICATION_NAME:operation-service}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
+    open-in-view: false
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
+    baseline-on-migrate: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:true}
+    baseline-version: ${SPRING_FLYWAY_BASELINE_VERSION:1}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${AUTH_JWK_SET_URI}
+
+server:
+  port: ${SERVER_PORT:8081}
+
+app:
+  time-zone: ${APP_TIME_ZONE:Asia/Phnom_Penh}
+  workday-start: ${APP_WORKDAY_START:08:00}
+  workday-end: ${APP_WORKDAY_END:17:00}
+  late-grace-minutes: ${APP_LATE_GRACE_MINUTES:15}
+  internal-api-key: ${INTERNAL_API_KEY}
