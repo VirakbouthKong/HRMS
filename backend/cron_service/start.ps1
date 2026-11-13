@@ -1,4 +1,4 @@
-$envFile = "D:\SETEC\Y4 S1\Spring Boot\Midterm\HR\Cron\Cron\.env"
+$envFile = if (Test-Path "$PSScriptRoot\.env") { "$PSScriptRoot\.env" } else { "D:\SETEC\Y4 S1\Spring Boot\Midterm\HR\Cron\.env" }
 Get-Content $envFile | Where-Object { $_ -match "^([^#\s]+)=(.*)$" } | ForEach-Object {
     $name = $matches[1].Trim()
     $value = $matches[2].Trim()
