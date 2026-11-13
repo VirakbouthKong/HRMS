@@ -1,0 +1,4 @@
+.maven-cache/
+# JWT signing keys (private key must never be committed)
+keys/
+*.pem

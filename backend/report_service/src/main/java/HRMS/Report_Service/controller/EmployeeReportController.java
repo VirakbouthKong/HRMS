@@ -66,4 +66,17 @@ public class EmployeeReportController {
                 )
         );
     }
+
+    @GetMapping("/job/{jobId}")
+    public ResponseEntity<ApiResponse<List<EmployeeReportResponse>>> getEmployeesByJob(
+            @PathVariable Integer jobId) {
+
+        return ResponseEntity.ok(
+                new ApiResponse<>(
+                        true,
+                        "Employees By Job",
+                        employeeReportService.getEmployeesByJob(jobId)
+                )
+        );
+    }
 }

@@ -21,50 +21,53 @@ public class LeaveController {
         this.leaveService = leaveService;
     }
 
-    private Integer currentEmployeeId() {
-        Jwt jwt = (Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return Integer.valueOf(jwt.getClaimAsString("employeeId"));
+    /** From the token's employeeId claim; never the account id (see CurrentEmployee). */
+
+    private static Integer currentEmployeeId() {
+
+        return com.example.hr.common.security.CurrentEmployee.id();
+
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF','EMPLOYEE')")
     public LeaveResponse submitLeave(@Valid @RequestBody LeaveSubmitRequest request) {
         return leaveService.submitLeave(currentEmployeeId(), request);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF')")
     public List<LeaveResponse> getLeaves() {
         return leaveService.getLeaves();
     }
 
     @GetMapping("/me")
-    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF','EMPLOYEE')")
     public List<LeaveResponse> getMyLeaves() {
         return leaveService.getLeavesByEmployee(currentEmployeeId());
     }
 
     @GetMapping("/{leaveId}")
-    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF')")
     public LeaveResponse getLeave(@PathVariable Integer leaveId) {
         return leaveService.getLeave(leaveId);
     }
 
     @PatchMapping("/{leaveId}/approve")
-    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF')")
     public LeaveResponse approveLeave(@PathVariable Integer leaveId) {
         return leaveService.approveLeave(leaveId, currentEmployeeId());
     }
 
     @PatchMapping("/{leaveId}/reject")
-    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF')")
     public LeaveResponse rejectLeave(@PathVariable Integer leaveId) {
         return leaveService.rejectLeave(leaveId, currentEmployeeId());
     }
 
     @PatchMapping("/{leaveId}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF','EMPLOYEE')")
     public LeaveResponse cancelLeave(@PathVariable Integer leaveId) {
         return leaveService.cancelLeave(leaveId, currentEmployeeId());
     }

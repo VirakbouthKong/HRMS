@@ -1,0 +1,189 @@
+{
+  "info": {
+    "name": "HRMS API Gateway",
+    "description": "Login with email OTP + JWT through the API Gateway (http://localhost:8080).\n\n1. Set the collection variables userName and password (Variables tab).\n2. Run '1. Login (send OTP)'.\n3. Run '2. Verify OTP (get token)'. With useMailpit=true the OTP is read from Mailpit automatically; otherwise type it into otpCode.\n4. The token is saved automatically and used by every other request.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "mailpitUrl", "value": "http://localhost:8025" },
+    { "key": "useMailpit", "value": "true" },
+    { "key": "userName", "value": "sysadmin" },
+    { "key": "password", "value": "" },
+    { "key": "otpCode", "value": "" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. Login",
+      "item": [
+        {
+          "name": "1. Login (send OTP)",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "pm.test('OTP was sent (200)', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('otpCode', '');"
+            ]}
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"userName\": \"{{userName}}\",\n  \"password\": \"{{password}}\"\n}" },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "2. Verify OTP (get token)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "type": "text/javascript", "exec": [
+                "// Reads the newest OTP email from Mailpit when useMailpit=true and otpCode is empty.",
+                "if (pm.collectionVariables.get('useMailpit') === 'true' && !pm.collectionVariables.get('otpCode')) {",
+                "  pm.sendRequest(pm.collectionVariables.get('mailpitUrl') + '/api/v1/messages?limit=1', (err, res) => {",
+                "    if (err) { console.log('Mailpit not reachable', err); return; }",
+                "    const msg = res.json().messages[0];",
+                "    const match = msg && msg.Subject.match(/(\\d{6})/);",
+                "    if (match) { pm.collectionVariables.set('otpCode', match[1]); }",
+                "  });",
+                "}"
+              ]}
+            },
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('Token issued (200)', () => pm.response.to.have.status(200));",
+                "const body = pm.response.json();",
+                "if (body.token) { pm.collectionVariables.set('token', body.token); }",
+                "pm.collectionVariables.set('otpCode', '');"
+              ]}
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"userName\": \"{{userName}}\",\n  \"otpCode\": \"{{otpCode}}\"\n}" },
+            "url": "{{baseUrl}}/api/auth/verify-otp"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. With token",
+      "item": [
+        {
+          "name": "Accounts - list (ADMIN)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/accounts" }
+        },
+        {
+          "name": "Roles - list (ADMIN)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/roles" }
+        },
+        {
+          "name": "Report - dashboard (ADMIN, HR_MANAGER, HR_STAFF)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/report/dashboard" }
+        },
+        {
+          "name": "Operation - employees (ADMIN, HR_MANAGER, HR_STAFF)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/employees" }
+        },
+        {
+          "name": "Operation - my attendance (any role with an employee)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/attendance/me" }
+        },
+        {
+          "name": "CRON - job history (ADMIN, HR_MANAGER)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/jobs/history" }
+        },
+        {
+          "name": "CRON - trigger a job (ADMIN)",
+          "request": { "method": "POST", "url": "{{baseUrl}}/api/v1/jobs/ContractExpiryJob/trigger" }
+        },
+        {
+          "name": "Who am I (any logged-in user)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me" }
+        },
+        {
+          "name": "My photo",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/auth/me/photo" }
+        },
+        {
+          "name": "Upload my photo (choose a JPG/PNG/WebP up to 3 MB in Body > form-data > file)",
+          "request": {
+            "method": "PUT",
+            "body": { "mode": "formdata", "formdata": [{ "key": "file", "type": "file", "src": [] }] },
+            "url": "{{baseUrl}}/api/auth/me/photo"
+          }
+        },
+        {
+          "name": "Remove my photo",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/api/auth/me/photo" }
+        },
+        {
+          "name": "Employee icon (photo of employee 1)",
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/photos/employees/1" }
+        },
+        {
+          "name": "Change my password (returns a new token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const body = pm.response.json();",
+                  "if (body.token) { pm.collectionVariables.set('token', body.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"oldPassword\": \"{{password}}\",\n  \"newPassword\": \"<at least 8 characters>\"\n}" },
+            "url": "{{baseUrl}}/api/auth/change-password"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Should be blocked",
+      "item": [
+        {
+          "name": "No token -> 401",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 without token', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/api/employees" }
+        },
+        {
+          "name": "Fake token -> 401",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 with a fake token', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.fake", "type": "string" }] },
+            "method": "GET", "url": "{{baseUrl}}/api/employees"
+          }
+        },
+        {
+          "name": "Internal endpoint -> 403",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('internal endpoints are never reachable', () => pm.expect(pm.response.code).to.be.oneOf([401, 403]));"
+          ]}}],
+          "request": { "method": "GET", "url": "{{baseUrl}}/api/internal/attendance/daily-summary" }
+        }
+      ]
+    },
+    {
+      "name": "Public key (JWKS)",
+      "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{baseUrl}}/.well-known/jwks.json" }
+    }
+  ]
+}

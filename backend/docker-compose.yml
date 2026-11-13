@@ -1,0 +1,103 @@
+# HRMS backend: Config Server + 5 Spring Boot services + Mailpit (test email inbox).
+#
+#   cd backend
+#   docker compose up --build -d
+#
+# Only the API Gateway (8080) and Mailpit's inbox page (8025) are reachable from your PC
+# (the Config Server also on 127.0.0.1:8888, for services started from IntelliJ).
+# Settings live in backend/config-repo, served by the Config Server; each service's .env holds secrets only.
+# Shared secrets and optional mail settings come from backend/.env (copy backend/.env.example).
+
+name: hrms
+
+x-config-client: &config-client
+  SPRING_PROFILES_ACTIVE: docker                 # loads <service>-docker.yml (Docker host names)
+  CONFIG_SERVER_URL: http://config-server:8888
+  # Docker defaults to UTC; without this an "8 AM" CRON job would run at 3 PM Cambodia time.
+  TZ: Asia/Phnom_Penh
+
+services:
+
+  config-server:
+    build: ./config_server
+    environment:
+      CONFIG_REPO: file:/config-repo
+      TZ: Asia/Phnom_Penh
+    volumes:
+      - ./config-repo:/config-repo:ro   # edit files here, then POST /api/admin/config/refresh
+    ports:
+      - "127.0.0.1:8888:8888"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8888/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:v1.27.0
+    ports:
+      - "127.0.0.1:8025:8025"   # inbox web page: http://localhost:8025
+      - "127.0.0.1:1025:1025"   # SMTP, for services started from IntelliJ instead of Docker
+    restart: unless-stopped
+
+  auth-service:
+    build: ./auth_service
+    # backend/.env: BOOTSTRAP_ADMIN_* and, for real email, MAIL_* (they win over config-repo defaults).
+    env_file: [./auth_service/.env, ./.env]
+    environment:
+      <<: *config-client
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in backend/.env}
+    depends_on:
+      config-server: { condition: service_healthy }
+      mailpit: { condition: service_started }
+    restart: unless-stopped
+
+  report-service:
+    build: ./report_service
+    env_file: ./report_service/.env
+    environment:
+      <<: *config-client
+    depends_on:
+      config-server: { condition: service_healthy }
+    restart: unless-stopped
+
+  operation-service:
+    build: ./operation_service
+    env_file: ./operation_service/.env
+    environment:
+      <<: *config-client
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in backend/.env}
+    depends_on:
+      config-server: { condition: service_healthy }
+    restart: unless-stopped
+
+  cron-service:
+    build: ./cron_service
+    env_file: ./cron_service/.env
+    environment:
+      <<: *config-client
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in backend/.env}
+    depends_on:
+      config-server: { condition: service_healthy }
+    restart: unless-stopped
+
+  api-gateway:
+    build: ./api_gateway
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *config-client
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:?Set INTERNAL_API_KEY in backend/.env}
+    volumes:
+      - jwt-keys:/app/keys   # the signing key pair survives rebuilds and restarts
+    depends_on:
+      config-server: { condition: service_healthy }
+      auth-service: { condition: service_started }
+      report-service: { condition: service_started }
+      operation-service: { condition: service_started }
+      cron-service: { condition: service_started }
+    restart: unless-stopped
+
+volumes:
+  jwt-keys:

@@ -1,6 +1,7 @@
 package HRMS.Report_Service.service.impl;
 
 import HRMS.Report_Service.dto.response.LeaveReportResponse;
+import HRMS.Report_Service.exception.ResourceNotFoundException;
 import HRMS.Report_Service.entity.LeaveRequest;
 import HRMS.Report_Service.repository.LeaveRepository;
 import HRMS.Report_Service.service.LeaveReportService;
@@ -30,7 +31,7 @@ public class LeaveReportServiceImpl implements LeaveReportService {
     public LeaveReportResponse getLeaveById(Integer id) {
 
         LeaveRequest leave = leaveRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Leave not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Leave not found"));
 
         return mapToResponse(leave);
     }

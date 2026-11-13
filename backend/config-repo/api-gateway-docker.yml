@@ -1,0 +1,11 @@
+# API Gateway inside Docker: services are reached by their container names.
+hrms:
+  services:
+    auth: http://auth-service:8081
+    report: http://report-service:8082
+    operation: http://operation-service:8083
+    cron: http://cron-service:8084
+
+app:
+  jwt:
+    key-dir: /app/keys   # named volume jwt-keys, survives rebuilds

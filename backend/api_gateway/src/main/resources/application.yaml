@@ -1,0 +1,17 @@
+# Settings live in the Config Server: backend/config-repo/api-gateway.yml (+ api-gateway-docker.yml)
+# and frontend.yml. Routes, access rules and frontend settings reload without a restart:
+#   POST /api/admin/config/refresh   (ADMIN token)
+# This file only says who this service is and where to find its settings. Secrets stay in .env.
+spring:
+  application:
+    name: api-gateway
+  config:
+    import:
+      # Secrets (INTERNAL_API_KEY), when started from the repository root or this folder.
+      - "optional:file:./.env[.properties]"
+      - "optional:file:./backend/api_gateway/.env[.properties]"
+      - "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  cloud:
+    config:
+      name: api-gateway,frontend   # files to load: api-gateway*.yml and frontend.yml
+      fail-fast: true              # no Config Server = do not start half-configured

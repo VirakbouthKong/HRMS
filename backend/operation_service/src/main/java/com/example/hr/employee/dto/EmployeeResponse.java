@@ -13,6 +13,7 @@ public record EmployeeResponse(
         LocalDate contractEndDate,
         EmployeeStatus status,
         Integer departmentId,
-        String departmentName
+        String departmentName,
+        String jobTitle
 ) {
 }

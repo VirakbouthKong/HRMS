@@ -1,6 +1,7 @@
 package HRMS.Report_Service.service.impl;
 
 import HRMS.Report_Service.dto.response.PayrollReportResponse;
+import HRMS.Report_Service.exception.ResourceNotFoundException;
 import HRMS.Report_Service.entity.PayrollRecord;
 import HRMS.Report_Service.repository.PayrollRecordRepository;
 import HRMS.Report_Service.service.PayrollReportService;
@@ -30,7 +31,7 @@ public class PayrollReportServiceImpl implements PayrollReportService {
     public PayrollReportResponse getPayrollById(Integer id) {
 
         PayrollRecord payroll = payrollRecordRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Payroll not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Payroll not found"));
 
         return mapToResponse(payroll);
     }

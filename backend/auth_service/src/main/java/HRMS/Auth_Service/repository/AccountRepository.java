@@ -18,4 +18,9 @@ public interface AccountRepository extends JpaRepository<Account, Integer> {
 
     boolean existsByRole(Role role);
 
+    /** One employee has at most one account (unique index uq_account_employee_id). */
+    Optional<Account> findByEmployeeId(Integer employeeId);
+
+    boolean existsByEmployeeId(Integer employeeId);
+
 }

@@ -1,0 +1,10 @@
+# Settings shared by every HRMS service (each service also gets <its-name>.yml).
+# No secrets here: passwords and keys stay in each service's .env and are referenced as ${NAME}.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never

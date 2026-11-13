@@ -1,32 +1,18 @@
+# Settings live in the Config Server: backend/config-repo/operation-service.yml (+ -docker.yml).
+# This file only says who this service is and where to find them. Secrets stay in .env.
 spring:
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:local-dev}
   application:
-    name: ${SPRING_APPLICATION_NAME:operation-service}
-  datasource:
-    url: ${SPRING_DATASOURCE_URL}
-    username: ${SPRING_DATASOURCE_USERNAME}
-    password: ${SPRING_DATASOURCE_PASSWORD}
-  jpa:
-    hibernate:
-      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
-    open-in-view: false
-  flyway:
-    enabled: ${SPRING_FLYWAY_ENABLED:true}
-    baseline-on-migrate: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:true}
-    baseline-version: ${SPRING_FLYWAY_BASELINE_VERSION:1}
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: ${AUTH_JWK_SET_URI}
-
-server:
-  port: ${SERVER_PORT:8081}
-
-app:
-  time-zone: ${APP_TIME_ZONE:Asia/Phnom_Penh}
-  workday-start: ${APP_WORKDAY_START:08:00}
-  workday-end: ${APP_WORKDAY_END:17:00}
-  late-grace-minutes: ${APP_LATE_GRACE_MINUTES:15}
-  internal-api-key: ${INTERNAL_API_KEY}
+    name: operation-service
+  profiles:
+    # "local-dev" (default outside Docker) disables JWT checks and trusts X-Mock-* headers.
+    # Docker sets SPRING_PROFILES_ACTIVE=docker.
+    active: ${SPRING_PROFILES_ACTIVE:local-dev}
+  config:
+    import:
+      # Secrets (SPRING_DATASOURCE_*, INTERNAL_API_KEY), when started from the repository root or this folder.
+      - "optional:file:./.env[.properties]"
+      - "optional:file:./backend/operation_service/.env[.properties]"
+      - "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  cloud:
+    config:
+      fail-fast: true   # no Config Server = do not start half-configured
