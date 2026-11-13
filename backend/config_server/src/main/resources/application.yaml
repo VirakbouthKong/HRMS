@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: config-server
+  profiles:
+    active: native          # read plain files from a folder (no Git server needed)
+  cloud:
+    config:
+      server:
+        native:
+          # Docker mounts backend/config-repo at /config-repo; from IntelliJ the default works when
+          # started in backend/config_server or with CONFIG_REPO=file:<path>.
+          search-locations: ${CONFIG_REPO:file:../config-repo}
+
+server:
+  port: ${SERVER_PORT:8888}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

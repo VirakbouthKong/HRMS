@@ -101,6 +101,30 @@ public class ApiExceptionHandler {
     }
 
 
+    @ExceptionHandler(com.example.hr.employee.exception.EmployeeNotLinkedException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError handleNotLinked(com.example.hr.employee.exception.EmployeeNotLinkedException exception) {
+        return new ApiError(exception.getMessage(), List.of());
+    }
+
+    @ExceptionHandler(com.example.hr.job.exception.JobNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ApiError handleJobNotFound(com.example.hr.job.exception.JobNotFoundException exception) {
+        return new ApiError(exception.getMessage(), List.of());
+    }
+
+    @ExceptionHandler(com.example.hr.job.exception.DuplicateJobException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError handleDuplicateJob(com.example.hr.job.exception.DuplicateJobException exception) {
+        return new ApiError(exception.getMessage(), List.of());
+    }
+
+    @ExceptionHandler(com.example.hr.job.exception.JobInUseException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError handleJobInUse(com.example.hr.job.exception.JobInUseException exception) {
+        return new ApiError(exception.getMessage(), List.of());
+    }
+
     public record ApiError(String message, List<String> errors) {
     }
 }

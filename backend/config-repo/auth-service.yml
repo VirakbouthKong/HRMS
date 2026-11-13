@@ -1,0 +1,57 @@
+# Auth service. Secrets (DB_*, INTERNAL_API_KEY, MAIL_USERNAME/PASSWORD, BOOTSTRAP_ADMIN_*) come from
+# the environment (.env); only their names appear here.
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  # Auth's own migrations, tracked in their own history table so they never mix with
+  # Operation's flyway_schema_history in the shared database. Existing tables count as version 1.
+  flyway:
+    table: flyway_auth_history
+    baseline-on-migrate: true
+    baseline-version: 1
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+
+  # SMTP for OTP emails. Development: Mailpit. Real email (e.g. Gmail): set MAIL_* in backend/.env;
+  # those values win over the defaults written here.
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:false}
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# Internal endpoints are not reachable from outside, so hide them from Swagger.
+springdoc:
+  paths-to-exclude: /api/internal/**
+
+app:
+  internal-api-key: ${INTERNAL_API_KEY}
+  mail:
+    from: ${MAIL_FROM:HRMS <no-reply@hrms.local>}
+  otp:
+    resend-cooldown-seconds: 60
+    max-attempts: 5
+  # Creates this ADMIN account on startup if it does not exist yet (leave username empty to skip).
+  bootstrap-admin:
+    username: ${BOOTSTRAP_ADMIN_USERNAME:}
+    password: ${BOOTSTRAP_ADMIN_PASSWORD:}
+    email: ${BOOTSTRAP_ADMIN_EMAIL:}

@@ -1,25 +1,14 @@
+# Settings live in the Config Server: backend/config-repo/cron-service.yml (+ cron-service-docker.yml).
+# This file only says who this service is and where to find them. Secrets stay in .env.
 spring:
   application:
     name: cron-service
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/hr_db}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:password}
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-
-server:
-  port: ${SERVER_PORT:8082}
-
-operation:
-  service:
-    base-url: ${OPERATION_SERVICE_BASE_URL:http://localhost:8081}
-
-internal:
-  api:
-    key: ${INTERNAL_API_KEY:default-secret-key}
+  config:
+    import:
+      # Secrets (DB_*, INTERNAL_API_KEY), when started from the repository root or this folder.
+      - "optional:file:./.env[.properties]"
+      - "optional:file:./backend/cron_service/.env[.properties]"
+      - "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  cloud:
+    config:
+      fail-fast: true   # no Config Server = do not start half-configured

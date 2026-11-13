@@ -50,6 +50,11 @@ public class AccountServiceImpl implements AccountService {
             return new ApiResponse(false, "Email already exists.");
         }
 
+        // One employee = one account (also guaranteed by the unique index uq_account_employee_id).
+        if (accountRepository.existsByEmployeeId(request.getEmployeeId())) {
+            return new ApiResponse(false, "This employee already has an account.");
+        }
+
         Role role = roleRepository.findById(request.getRoleId())
                 .orElse(null);
 

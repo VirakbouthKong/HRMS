@@ -1,0 +1,137 @@
+# API Gateway. Routes, access-rules and frontend.yml reload WITHOUT a restart:
+#   POST /api/admin/config/refresh   (ADMIN token)
+# Everything else here is read once at start-up.
+
+# Where each service lives (IntelliJ defaults; api-gateway-docker.yml has the Docker names).
+hrms:
+  services:
+    auth: http://localhost:8081
+    report: http://localhost:8082
+    operation: http://localhost:8083
+    cron: http://localhost:8084
+
+server:
+  port: 8080
+
+spring:
+  # Photo uploads (PUT /api/auth/me/photo): photos may be 3 MB; refuse anything far bigger early.
+  webflux:
+    multipart:
+      max-disk-usage-per-part: 4MB
+  cloud:
+    gateway:
+      server:
+        webflux:
+          default-filters:
+            # Never let clients send headers that backend services trust.
+            - RemoveRequestHeader=X-Internal-Api-Key
+            - RemoveRequestHeader=X-Mock-Employee-Id
+            - RemoveRequestHeader=X-Mock-Roles
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_FIRST
+          # /api/internal/** is intentionally not routed, so it stays private.
+          # Gateway endpoints (verify-otp, /me, change-password, /me/photo, public config) are answered
+          # by the gateway itself and win over these routes.
+          routes:
+            - id: auth-service
+              uri: ${hrms.services.auth}
+              predicates:
+                - Path=/api/auth/**,/api/accounts/**,/api/roles/**,/api/photos/**
+
+            - id: report-service
+              uri: ${hrms.services.report}
+              predicates:
+                - Path=/api/report/**
+
+            - id: operation-service
+              uri: ${hrms.services.operation}
+              predicates:
+                - Path=/api/employees/**,/api/departments/**,/api/jobs/**,/api/attendance/**,/api/leaves/**,/api/payroll/**
+
+            - id: cron-service
+              uri: ${hrms.services.cron}
+              predicates:
+                - Path=/api/v1/jobs/**
+
+            # API descriptions for Swagger UI: /docs/<service>/v3/api-docs -> <service>/v3/api-docs
+            - id: auth-docs
+              uri: ${hrms.services.auth}
+              predicates:
+                - Path=/docs/auth/v3/api-docs
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: operation-docs
+              uri: ${hrms.services.operation}
+              predicates:
+                - Path=/docs/operation/v3/api-docs
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: report-docs
+              uri: ${hrms.services.report}
+              predicates:
+                - Path=/docs/report/v3/api-docs
+              filters:
+                - SetPath=/v3/api-docs
+
+            - id: cron-docs
+              uri: ${hrms.services.cron}
+              predicates:
+                - Path=/docs/cron/v3/api-docs
+              filters:
+                - SetPath=/v3/api-docs
+
+app:
+  # Who may call which path. Checked top to bottom, first match wins; a path with no rule needs any
+  # valid token. Roles: ADMIN, HR_MANAGER, HR_STAFF, EMPLOYEE. Reloads with the routes.
+  # Login, OTP, health, Swagger, /api/public/config, /api/internal/** and the refresh endpoint are
+  # fixed in SecurityConfig and cannot be changed here.
+  access-rules:
+    - paths: [/api/auth/reset-password]
+      methods: [PUT]
+      roles: [ADMIN]
+    - paths: [/api/accounts/**, /api/roles/**]
+      roles: [ADMIN]
+    - paths: [/api/report/**]
+      roles: [ADMIN, HR_MANAGER, HR_STAFF]
+    - paths: [/api/v1/jobs/history]
+      methods: [GET]
+      roles: [ADMIN, HR_MANAGER]
+    - paths: [/api/v1/jobs/**]
+      roles: [ADMIN]
+
+  # Shared secret sent to Auth's /api/internal/** endpoints (value comes from the environment).
+  internal-api-key: ${INTERNAL_API_KEY}
+  auth-service-url: ${hrms.services.auth}
+  jwt:
+    issuer: hrms-api-gateway
+    ttl: 8h
+    # The RSA key pair is created here on first start and reused afterwards. Keep it out of Git.
+    key-dir: ${user.home}/.hrms/jwt-keys
+  cors:
+    allowed-origins: http://localhost:5173,http://localhost:3000
+
+# Swagger UI for every service: http://localhost:8080/swagger-ui.html
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    persist-authorization: true
+    display-request-duration: true
+    filter: true
+    operations-sorter: alpha
+    urls-primary-name: "0. All endpoints (one page)"
+    urls:
+      - name: "0. All endpoints (one page)"
+        url: /docs/all/openapi.json
+      - name: "1. Login & Token (Gateway)"
+        url: /v3/api-docs
+      - name: "2. Auth Service"
+        url: /docs/auth/v3/api-docs
+      - name: "3. Operation Service"
+        url: /docs/operation/v3/api-docs
+      - name: "4. Report Service"
+        url: /docs/report/v3/api-docs
+      - name: "5. CRON Service"
+        url: /docs/cron/v3/api-docs

@@ -13,4 +13,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, Integer> {
     boolean existsByDepartmentDepartmentId(Integer departmentId);
 
     List<Employee> findByContractEndDateBetween(java.time.LocalDate start, java.time.LocalDate end);
+
+    long countByJobJobId(Integer jobId);
 }

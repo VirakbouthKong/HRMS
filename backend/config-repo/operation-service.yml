@@ -1,0 +1,34 @@
+# Operation service. Secrets (SPRING_DATASOURCE_*, INTERNAL_API_KEY) come from its .env.
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: none   # same as before the Config Server (Operation's .env had none)
+    open-in-view: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 1
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Public key used to check tokens, published by the gateway.
+          jwk-set-uri: http://localhost:8080/.well-known/jwks.json
+
+# Internal endpoints are not reachable from outside, so hide them from Swagger.
+springdoc:
+  paths-to-exclude: /api/internal/**
+
+app:
+  time-zone: Asia/Phnom_Penh
+  workday-start: "08:00"
+  workday-end: "17:00"
+  late-grace-minutes: 15
+  internal-api-key: ${INTERNAL_API_KEY}

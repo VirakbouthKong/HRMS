@@ -14,8 +14,23 @@ import org.springframework.boot.test.context.SpringBootTest;
 })
 class HrApplicationTests {
 
+	@org.springframework.beans.factory.annotation.Autowired
+	org.springframework.core.env.ConfigurableEnvironment env;
+
 	@Test
 	void contextLoads() {
 	}
 
+	/** Normal settings live in backend/config-repo/operation-service.yml, not in this service. */
+	@Test
+	void settingsComeFromConfigRepo() {
+		org.assertj.core.api.Assertions.assertThat(sourceOf("server.port")).contains("operation-service.yml");
+		org.assertj.core.api.Assertions.assertThat(sourceOf("app.workday-start")).contains("operation-service.yml");
+	}
+
+	private String sourceOf(String key) {
+		return env.getPropertySources().stream().filter(p -> !p.getName().equals("configurationProperties")) // summary of all sources
+				.filter(p -> p.containsProperty(key))
+				.map(org.springframework.core.env.PropertySource::getName).findFirst().orElse("none");
+	}
 }

@@ -1,6 +1,7 @@
 package HRMS.Report_Service.service.impl;
 
 import HRMS.Report_Service.dto.response.EmployeeReportResponse;
+import HRMS.Report_Service.exception.ResourceNotFoundException;
 import HRMS.Report_Service.entity.Employee;
 import HRMS.Report_Service.repository.EmployeeRepository;
 import HRMS.Report_Service.service.EmployeeReportService;
@@ -28,7 +29,7 @@ public class EmployeeReportServiceImpl implements EmployeeReportService {
     public EmployeeReportResponse getEmployeeById(Integer id) {
 
         Employee employee = employeeRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Employee not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found"));
 
         return mapToResponse(employee);
     }
@@ -46,6 +47,15 @@ public class EmployeeReportServiceImpl implements EmployeeReportService {
     public List<EmployeeReportResponse> getEmployeesByDepartment(Integer departmentId) {
 
         return employeeRepository.findByDepartment_DepartmentId(departmentId)
+                .stream()
+                .map(this::mapToResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<EmployeeReportResponse> getEmployeesByJob(Integer jobId) {
+
+        return employeeRepository.findByJob_JobId(jobId)
                 .stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());

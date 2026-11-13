@@ -13,6 +13,10 @@ public record EmployeeRequest(
         @NotNull LocalDate dateOfBirth,
         @NotBlank @Email String email,
         LocalDate contractEndDate,
-        @NotNull Integer departmentId
+        @NotNull Integer departmentId,
+        /** Must be a job of departmentId (GET /api/jobs?departmentId=...). */
+        @NotNull Integer jobId,
+        /** Optional, saved in job history when the job changes (e.g. "Promotion"). */
+        @Size(max = 255) String jobChangeRemark
 ) {
 }

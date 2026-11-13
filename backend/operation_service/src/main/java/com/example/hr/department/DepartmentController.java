@@ -29,25 +29,25 @@ public class DepartmentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER', 'HR_STAFF')")
     public DepartmentResponse createDepartment(@Valid @RequestBody DepartmentRequest request) {
         return departmentService.createDepartment(request);
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER', 'HR_STAFF')")
     public List<DepartmentResponse> listDepartments() {
         return departmentService.getDepartments();
     }
 
     @GetMapping("/{departmentId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER', 'HR_STAFF')")
     public DepartmentResponse getDepartment(@PathVariable Integer departmentId) {
         return departmentService.getDepartment(departmentId);
     }
 
     @PatchMapping("/{departmentId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER', 'HR_STAFF')")
     public DepartmentResponse updateDepartment(@PathVariable Integer departmentId,
                                                @Valid @RequestBody DepartmentRequest request) {
         return departmentService.updateDepartment(departmentId, request);
@@ -55,7 +55,7 @@ public class DepartmentController {
 
     @DeleteMapping("/{departmentId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER', 'HR_STAFF')")
     public void deleteDepartment(@PathVariable Integer departmentId) {
         departmentService.deleteDepartment(departmentId);
     }

@@ -1,0 +1,25 @@
+# CRON service. Secrets (DB_*, INTERNAL_API_KEY) come from its .env.
+server:
+  port: 8084
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+operation:
+  service:
+    # CRON calls Operation directly (not through the gateway) with the internal API key.
+    base-url: http://localhost:8083
+
+internal:
+  api:
+    key: ${INTERNAL_API_KEY}

@@ -1,0 +1,4 @@
+# Auth inside Docker: the test inbox runs as container "mailpit" (MAIL_HOST in backend/.env still wins).
+spring:
+  mail:
+    host: ${MAIL_HOST:mailpit}

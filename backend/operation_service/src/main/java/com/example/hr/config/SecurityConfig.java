@@ -31,6 +31,8 @@ public class SecurityConfig {
 
         http.authorizeHttpRequests(authorize -> authorize
                 .requestMatchers("/api/internal/**").permitAll()
+                // API description for Swagger UI (endpoints themselves still need a token)
+                .requestMatchers("/v3/api-docs/**").permitAll()
                 .anyRequest().authenticated());
 
         http.oauth2ResourceServer(oauth2 -> oauth2

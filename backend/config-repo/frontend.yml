@@ -1,0 +1,41 @@
+# What the frontend may know, served publicly at GET /api/public/config (no token).
+# Only the "frontend" section below is ever returned. NEVER put secrets here.
+# Change a value, then POST /api/admin/config/refresh: the frontend sees it at its next page load.
+frontend:
+  appName: HRMS
+  apiBase: http://localhost:8080
+  # Logical name -> path. The frontend calls endpoints by name, so moving a path needs no frontend deploy.
+  endpoints:
+    login: /api/auth/login
+    verifyOtp: /api/auth/verify-otp
+    me: /api/auth/me
+    changePassword: /api/auth/change-password
+    myPhoto: /api/auth/me/photo
+    employeePhoto: /api/photos/employees/{employeeId}
+    employees: /api/employees
+    myProfile: /api/employees/me
+    myJobHistory: /api/employees/me/job-history
+    employeeJobHistory: /api/employees/{employeeId}/job-history
+    departments: /api/departments
+    jobs: /api/jobs
+    reportEmployeesByJob: /api/report/employees/job/{jobId}
+    myAttendance: /api/attendance/me
+    checkIn: /api/attendance/check-in
+    checkOut: /api/attendance/check-out
+    leaves: /api/leaves
+    myLeaves: /api/leaves/me
+    myPayroll: /api/payroll/me
+    reportDashboard: /api/report/dashboard
+    jobHistory: /api/v1/jobs/history
+  # On/off switches for parts of the frontend.
+  features:
+    photoUpload: true
+    payroll: true
+    reports: true
+  # Limits the frontend can show before calling the API (the backend enforces them anyway).
+  limits:
+    photoMaxBytes: 3145728
+    photoTypes: image/jpeg,image/png,image/webp
+    passwordMinLength: 8
+    otpValidMinutes: 5
+    otpResendSeconds: 60

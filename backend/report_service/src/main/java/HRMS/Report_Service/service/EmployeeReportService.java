@@ -14,4 +14,6 @@ public interface EmployeeReportService {
 
     List<EmployeeReportResponse> getEmployeesByDepartment(Integer departmentId);
 
+    List<EmployeeReportResponse> getEmployeesByJob(Integer jobId);
+
 }

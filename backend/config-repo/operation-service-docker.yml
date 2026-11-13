@@ -1,0 +1,7 @@
+# Operation inside Docker: the gateway is reached by its container name.
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://api-gateway:8080/.well-known/jwks.json

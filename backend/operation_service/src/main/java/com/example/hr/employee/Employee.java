@@ -1,6 +1,7 @@
 package com.example.hr.employee;
 
 import com.example.hr.department.Department;
+import com.example.hr.job.Job;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -48,6 +49,11 @@ public class Employee {
     @JoinColumn(name = "department_id")
     private Department department;
 
+    /** Must belong to the employee's department (checked in EmployeeService). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "job_id")
+    private Job job;
+
     protected Employee() {
     }
 
@@ -60,6 +66,19 @@ public class Employee {
             LocalDate contractEndDate,
             Department department
     ) {
+        this(firstName, lastName, dateOfBirth, email, status, contractEndDate, department, null);
+    }
+
+    public Employee(
+            String firstName,
+            String lastName,
+            LocalDate dateOfBirth,
+            String email,
+            EmployeeStatus status,
+            LocalDate contractEndDate,
+            Department department,
+            Job job
+    ) {
         this.firstName = firstName;
         this.lastName = lastName;
         this.dateOfBirth = dateOfBirth;
@@ -67,6 +86,15 @@ public class Employee {
         this.status = status;
         this.contractEndDate = contractEndDate;
         this.department = department;
+        this.job = job;
+    }
+
+    public Job getJob() {
+        return job;
+    }
+
+    public void changeJob(Job job) {
+        this.job = job;
     }
 
 

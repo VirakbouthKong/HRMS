@@ -1,0 +1,4 @@
+# CRON inside Docker: Operation is reached by its container name.
+operation:
+  service:
+    base-url: http://operation-service:8083

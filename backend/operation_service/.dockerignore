@@ -1,0 +1,12 @@
+# Keep secrets and build output out of the image
+.env
+.env.*
+target/
+keys/
+.idea/
+*.iml
+.mvn/
+mvnw
+mvnw.cmd
+.maven-cache/
+HELP.md
