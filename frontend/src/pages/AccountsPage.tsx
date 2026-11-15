@@ -24,6 +24,7 @@ import { Modal } from '../components/ui/modal';
 import { MetricCard } from '../components/dashboard/MetricCard';
 import { InitialsAvatar, StatusChip, localeFor } from '../components/dashboard/DashboardCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
+import { RolesPanel } from '../components/accounts/RolesPanel';
 
 const ROLE_LABELS: Record<string, TranslationKey> = {
   ADMIN: 'acRoleAdmin',
@@ -72,6 +73,7 @@ export const AccountsPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
+  const [pageTab, setPageTab] = useState<'accounts' | 'roles'>('accounts');
   const [statusTab, setStatusTab] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
   const [search, setSearch] = useState('');
 
@@ -301,6 +303,17 @@ export const AccountsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Sections: accounts and roles (both admin only) */}
+      <FilterTabs
+        label={t('rlPageTabsLabel')}
+        value={pageTab}
+        onChange={setPageTab}
+        tabs={[
+          { value: 'accounts', label: t('rlTabAccounts'), count: accounts.length },
+          { value: 'roles', label: t('rlTabRoles'), count: roles.length },
+        ]}
+      />
+
       {/* 1. Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
@@ -351,6 +364,18 @@ export const AccountsPage: React.FC = () => {
         </div>
       )}
 
+      {pageTab === 'roles' ? (
+        <RolesPanel
+          roles={roles}
+          accounts={accounts}
+          roleLabel={roleLabel}
+          onChanged={async (message) => {
+            flash(message);
+            await load();
+          }}
+        />
+      ) : (
+      <>
       {/* 2. Tabs + actions */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <FilterTabs
@@ -685,6 +710,8 @@ export const AccountsPage: React.FC = () => {
           </div>
         </div>
       </Modal>
+      </>
+      )}
     </div>
   );
 };

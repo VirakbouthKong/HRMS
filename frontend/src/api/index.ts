@@ -303,6 +303,18 @@ export const roleApi = {
     const res = await apiClient.get<RoleSummary[]>('/api/roles');
     return res.data;
   },
+  create: async (payload: { roleName: string; description: string }): Promise<AuthApiResponse> => {
+    const res = await apiClient.post<AuthApiResponse>('/api/roles', payload);
+    return res.data;
+  },
+  update: async (roleId: number, payload: { roleName: string; description: string }): Promise<AuthApiResponse> => {
+    const res = await apiClient.put<AuthApiResponse>(`/api/roles/${roleId}`, payload);
+    return res.data;
+  },
+  remove: async (roleId: number): Promise<AuthApiResponse> => {
+    const res = await apiClient.delete<AuthApiResponse>(`/api/roles/${roleId}`);
+    return res.data;
+  },
 };
 
 // ==========================================
