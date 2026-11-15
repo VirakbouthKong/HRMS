@@ -87,13 +87,6 @@ export interface JobHistoryItem {
   remark?: string | null;
 }
 
-export interface AttendanceCorrectionPayload {
-  checkIn?: string;
-  checkOut?: string;
-  status?: string;
-  lateMinutes?: number;
-  reason: string;
-}
 
 export interface LeaveSubmitPayload {
   leaveType: string;
@@ -465,23 +458,7 @@ export const attendanceApi = {
     return res.data;
   },
 
-  requestCorrection: async (
-    attendanceId: number,
-    data: AttendanceCorrectionPayload | any
-  ): Promise<AttendanceRecord> => {
-    const res = await apiClient.post<AttendanceRecord>(
-      `/api/attendance/${attendanceId}/corrections`,
-      data
-    );
-    return res.data;
-  },
 
-  getCorrectionHistory: async (attendanceId: number): Promise<AttendanceCorrection[]> => {
-    const res = await apiClient.get<AttendanceCorrection[]>(
-      `/api/attendance/${attendanceId}/corrections`
-    );
-    return res.data;
-  },
 };
 
 export const attendanceRequestApi = {
@@ -490,10 +467,6 @@ export const attendanceRequestApi = {
   review: async (id: number, status: 'APPROVED' | 'REJECTED'): Promise<AttendanceCorrection> => (await apiClient.patch('/api/attendance-requests/' + id, { status })).data,
 };
 
-export const attendanceCorrectionApi = {
-  correct: attendanceApi.requestCorrection,
-  getHistory: attendanceApi.getCorrectionHistory,
-};
 
 // ==========================================
 // 6. Leave API
