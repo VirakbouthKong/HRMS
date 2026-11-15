@@ -11,6 +11,8 @@ import { DepartmentsPage } from './pages/DepartmentsPage';
 import { AutomationsPage } from './pages/AutomationsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { LoginPage } from './pages/LoginPage';
+import { AccountsPage } from './pages/AccountsPage';
+import { isRoleAllowedForTab } from './utils/rbac';
 import { LanguageSwitcher } from './components/ui/LanguageSwitcher';
 import { useHrmsStore, NavTab } from './store/useHrmsStore';
 import { useI18n, TranslationKey } from './i18n/useI18n';
@@ -176,6 +178,7 @@ export const App: React.FC = () => {
     payroll: { title: 'secTitlePayroll', subtitle: 'secSubPayroll' },
     reports: { title: 'secTitleReports', subtitle: 'secSubReports' },
     profile: { title: 'secTitleProfile', subtitle: 'secSubProfile' },
+    accounts: { title: 'secTitleAccounts', subtitle: 'secSubAccounts' },
   };
   const sectionMeta = SECTION_META[activeTab] ?? {
     title: 'secTitleDashboard' as TranslationKey,
@@ -203,6 +206,8 @@ export const App: React.FC = () => {
         return <ReportsPage />;
       case 'profile':
         return <ProfilePage />;
+      case 'accounts':
+        return isRoleAllowedForTab(currentUser.role, 'accounts') ? <AccountsPage /> : <DashboardPage />;
       default:
         return <DashboardPage />;
     }

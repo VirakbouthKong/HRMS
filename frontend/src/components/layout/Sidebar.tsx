@@ -13,6 +13,7 @@ import {
   Cpu,
   ArrowsClockwise,
   Leaf,
+  UserGear,
   IconProps,
 } from '@phosphor-icons/react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -80,7 +81,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
     },
     {
       label: 'navGroupAccount',
-      items: [{ id: 'profile', label: t('navProfile'), icon: UserCircle }],
+      items: [
+        { id: 'profile', label: t('navProfile'), icon: UserCircle },
+        { id: 'accounts', label: t('navAccounts'), icon: UserGear },
+      ],
     },
   ];
   const groups = allGroups

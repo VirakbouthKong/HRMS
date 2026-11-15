@@ -121,6 +121,8 @@ export const isRoleAllowedForTab = (role: UserRole, tab: NavTab): boolean => {
       return role === 'ROLE_ADMIN' || role === 'ROLE_HR';
     case 'reports':
       return hasPermission(role, 'REPORTS_VIEW_EXECUTIVE');
+    case 'accounts':
+      return role === 'ROLE_ADMIN';
     default:
       return true;
   }
@@ -140,6 +142,7 @@ export const getAllowedTabs = (role: UserRole): NavTab[] => {
     'payroll',
     'reports',
     'profile',
+    'accounts',
   ];
   return allTabs.filter((tab) => isRoleAllowedForTab(role, tab));
 };

@@ -36,7 +36,8 @@ export type NavTab =
   | 'leaves'
   | 'payroll'
   | 'reports'
-  | 'profile';
+  | 'profile'
+  | 'accounts';
 
 export interface ActionResult<T = any> {
   success: boolean;

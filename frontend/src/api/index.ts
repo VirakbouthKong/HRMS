@@ -234,6 +234,70 @@ export const authApi = {
 };
 
 // ==========================================
+// 1b. User Accounts & Roles API (auth-service; ADMIN only at the gateway)
+// ==========================================
+
+export interface UserAccountSummary {
+  accountId: number;
+  userName: string;
+  email: string;
+  status: string; // 'ACTIVE' signs in; anything else is blocked
+  isFirstLogin: boolean;
+  employeeId: number | null;
+  roleName: string;
+  createdDate?: string;
+  updatedDate?: string;
+}
+
+export interface RoleSummary {
+  roleId: number;
+  roleName: string;
+  description?: string;
+}
+
+export interface CreateAccountPayload {
+  userName: string;
+  userPwd: string;
+  email: string;
+  status: string;
+  employeeId: number;
+  roleId: number;
+}
+
+export interface UpdateAccountPayload {
+  userName: string;
+  email: string;
+  status: string;
+  roleId: number;
+}
+
+export const accountApi = {
+  getAll: async (): Promise<UserAccountSummary[]> => {
+    const res = await apiClient.get<UserAccountSummary[]>('/api/accounts');
+    return res.data;
+  },
+  create: async (payload: CreateAccountPayload): Promise<AuthApiResponse> => {
+    const res = await apiClient.post<AuthApiResponse>('/api/accounts', payload);
+    return res.data;
+  },
+  update: async (accountId: number, payload: UpdateAccountPayload): Promise<AuthApiResponse> => {
+    const res = await apiClient.put<AuthApiResponse>(`/api/accounts/${accountId}`, payload);
+    return res.data;
+  },
+  remove: async (accountId: number): Promise<AuthApiResponse> => {
+    const res = await apiClient.delete<AuthApiResponse>(`/api/accounts/${accountId}`);
+    return res.data;
+  },
+};
+
+export const roleApi = {
+  getAll: async (): Promise<RoleSummary[]> => {
+    const res = await apiClient.get<RoleSummary[]>('/api/roles');
+    return res.data;
+  },
+};
+
+// ==========================================
 // 2. Employee API
 // ==========================================
 
