@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Clock,
   CheckCircle,
@@ -8,18 +8,22 @@ import {
   CurrencyDollar,
   ChartBar,
   WarningCircle,
+  IconProps,
 } from '@phosphor-icons/react';
 import { useHrmsStore } from '../store/useHrmsStore';
-import { BehavioralHistorySelect } from '../components/ui/behavioral-history-select';
 import { useI18n } from '../i18n/useI18n';
+import { JobExecution } from '../types';
+import { StatusChip, localeFor } from '../components/dashboard/DashboardCard';
+import { FilterTabs } from '../components/ui/filter-tabs';
 
 interface CronJobSpec {
   jobName: string;
   titleKey: 'cronAttTitle' | 'cronContractTitle' | 'cronPayrollTitle' | 'cronWeeklyTitle';
   taglineKey: 'cronAttTagline' | 'cronContractTagline' | 'cronPayrollTagline' | 'cronWeeklyTagline';
   cadenceKey: 'cronAttCadence' | 'cronContractCadence' | 'cronPayrollCadence' | 'cronWeeklyCadence';
+  /** Must match the @Scheduled(cron = ...) value of the job in backend/cron_service. */
   schedule: string;
-  icon: any;
+  icon: React.ComponentType<IconProps>;
 }
 
 const CRON_JOBS: CronJobSpec[] = [
@@ -28,7 +32,7 @@ const CRON_JOBS: CronJobSpec[] = [
     titleKey: 'cronAttTitle',
     taglineKey: 'cronAttTagline',
     cadenceKey: 'cronAttCadence',
-    schedule: '0 0 1 * * ?',
+    schedule: '0 0 0 * * *',
     icon: Clock,
   },
   {
@@ -44,7 +48,7 @@ const CRON_JOBS: CronJobSpec[] = [
     titleKey: 'cronPayrollTitle',
     taglineKey: 'cronPayrollTagline',
     cadenceKey: 'cronPayrollCadence',
-    schedule: '0 0 0 28 * ?',
+    schedule: '0 0 1 28 * ?',
     icon: CurrencyDollar,
   },
   {
@@ -52,18 +56,18 @@ const CRON_JOBS: CronJobSpec[] = [
     titleKey: 'cronWeeklyTitle',
     taglineKey: 'cronWeeklyTagline',
     cadenceKey: 'cronWeeklyCadence',
-    schedule: '0 0 9 ? * MON',
+    schedule: '0 0 8 * * MON',
     icon: ChartBar,
   },
 ];
 
 export const AutomationsPage: React.FC = () => {
   const { cronHistory, triggerCronJob, currentUser } = useHrmsStore();
-  const { t, tStatus } = useI18n();
+  const { t, language } = useI18n();
   const [triggeringJob, setTriggeringJob] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [selectedJobFilter, setSelectedJobFilter] = useState<string>('ALL');
+  const [jobFilter, setJobFilter] = useState<string>('ALL');
 
   const isAdmin = currentUser.role === 'ROLE_ADMIN' || currentUser.role === 'ROLE_HR';
 
@@ -84,201 +88,212 @@ export const AutomationsPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const filteredHistory =
-    selectedJobFilter === 'ALL'
-      ? cronHistory
-      : cronHistory.filter((h) => h.jobName === selectedJobFilter);
+  // Latest run per job drives the health summary and each card's "last run" line.
+  const latestByJob = useMemo(() => {
+    const map = new Map<string, JobExecution>();
+    cronHistory.forEach((run) => {
+      const prev = map.get(run.jobName);
+      if (!prev || (run.executionTime || '') > (prev.executionTime || '')) map.set(run.jobName, run);
+    });
+    return map;
+  }, [cronHistory]);
+  const failedJobs = Array.from(latestByJob.values()).filter((r) => r.status === 'FAILED').length;
+
+  const sortedHistory = useMemo(
+    () => [...cronHistory].sort((a, b) => (b.executionTime || '').localeCompare(a.executionTime || '')),
+    [cronHistory]
+  );
+  const filteredHistory = jobFilter === 'ALL' ? sortedHistory : sortedHistory.filter((h) => h.jobName === jobFilter);
+
+  const timeFmt = new Intl.DateTimeFormat(localeFor(language), {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const fmtTime = (ts?: string) => {
+    if (!ts) return '—';
+    const d = new Date(ts.replace(' ', 'T'));
+    return isNaN(d.getTime()) ? ts : timeFmt.format(d);
+  };
+  const fmtDuration = (ms?: number) =>
+    ms === undefined || ms === null
+      ? '—'
+      : ms >= 1000
+      ? t('auSeconds', { s: (ms / 1000).toFixed(1) })
+      : t('auMillis', { ms });
+  const jobTitle = (jobName: string) => {
+    const spec = CRON_JOBS.find((j) => j.jobName === jobName);
+    return spec ? t(spec.titleKey) : jobName;
+  };
+  const runChip = (status?: JobExecution['status']) =>
+    status === 'FAILED' ? (
+      <StatusChip tone="bad">{t('dashJobFailed')}</StatusChip>
+    ) : status === 'RUNNING' ? (
+      <StatusChip tone="info">{t('dashJobRunning')}</StatusChip>
+    ) : (
+      <StatusChip tone="ok">{t('dashJobSuccess')}</StatusChip>
+    );
 
   return (
-    <div className="space-y-6 pb-12 select-none">
-      {/* 1. Status Bar */}
-      <div className="flex items-center justify-between gap-4 pb-1">
-        <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-          {t('scheduledTasksCount', { count: CRON_JOBS.length })}
-        </span>
-
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200/80 text-[11px] font-mono font-semibold text-emerald-700">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>{t('daemonActive')}</span>
-        </span>
+    <div className="space-y-6 pb-12">
+      {/* 1. Health summary (from the latest run of each job, not a static badge) */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-slate-600">{t('auJobsCount', { count: CRON_JOBS.length })}</span>
+        {latestByJob.size === 0 ? (
+          <StatusChip tone="neutral">{t('auNoRunsChip')}</StatusChip>
+        ) : failedJobs > 0 ? (
+          <StatusChip tone="bad">{t('dashSomeFailed', { count: failedJobs })}</StatusChip>
+        ) : (
+          <StatusChip tone="ok">{t('dashAllHealthy')}</StatusChip>
+        )}
       </div>
 
-      {/* 2. Feedback Toasts */}
+      {/* 2. Feedback */}
       {toastMessage && (
         <div
           role="status"
           aria-live="polite"
-          className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between gap-3 animate-fadeIn"
+          className="p-3 rounded-lg bg-brand-50 border border-brand-200 text-sm text-brand-800 flex items-center gap-2 animate-fadeIn"
         >
-          <div className="flex items-center gap-2">
-            <CheckCircle weight="fill" className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="font-semibold">{toastMessage}</span>
-          </div>
-          <span className="font-mono text-[10px] text-emerald-600">{t('dispatched')}</span>
+          <CheckCircle weight="fill" className="w-4 h-4 shrink-0" />
+          <span className="font-semibold">{toastMessage}</span>
         </div>
       )}
-
       {errorMessage && (
         <div
           role="alert"
           aria-live="polite"
-          className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn"
+          className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800 flex items-center gap-2 animate-fadeIn"
         >
-          <WarningCircle weight="fill" className="w-4 h-4 text-rose-500 shrink-0" />
+          <WarningCircle weight="fill" className="w-4 h-4 text-rose-600 shrink-0" />
           <span className="font-medium">{errorMessage}</span>
         </div>
       )}
 
-      {/* 3. Scheduled Jobs Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 3. Scheduled jobs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {CRON_JOBS.map((job) => {
           const Icon = job.icon;
           const isRunning = triggeringJob === job.jobName;
-          const jobTitle = t(job.titleKey);
+          const title = t(job.titleKey);
+          const last = latestByJob.get(job.jobName);
 
           return (
-            <div
-              key={job.jobName}
-              className="rounded-2xl bg-white p-5 border border-slate-200/80 shadow-xs flex flex-col justify-between hover:shadow-md hover:border-slate-300 transition-[box-shadow,border-color] duration-150 min-h-[165px]"
-            >
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
-                    <Icon weight="duotone" className="w-5 h-5" />
-                  </div>
-                  <span className="text-[11px] font-medium text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                    {t(job.cadenceKey)}
-                  </span>
+            <section key={job.jobName} className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-3 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                  <Icon weight="regular" className="w-5 h-5" />
                 </div>
-
-                <h3 className="text-sm font-bold text-slate-900 mt-3 tracking-tight">
-                  {jobTitle}
-                </h3>
-                <p className="text-xs text-slate-500 mt-1 line-clamp-1">
-                  {t(job.taglineKey)}
-                </p>
+                {last && runChip(last.status)}
               </div>
 
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className="font-mono text-[10px] text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-                  {job.schedule}
-                </span>
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+                <p className="text-[13px] text-slate-500 mt-1">{t(job.taglineKey)}</p>
+              </div>
 
+              <div className="text-[13px] text-slate-700 flex flex-col gap-1">
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <Clock weight="regular" aria-hidden="true" className="w-4 h-4 text-slate-500" />
+                  {t(job.cadenceKey)}
+                </span>
+                <code title={t('auCronExpr')} className="text-xs text-slate-500 tabular-nums">
+                  {job.schedule}
+                </code>
+              </div>
+
+              <div className="mt-auto pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0 text-[13px]">
+                  <div className="text-slate-600 tabular-nums">
+                    {last ? t('auLastRun', { time: fmtTime(last.executionTime) }) : t('auNeverRun')}
+                  </div>
+                  {last?.status === 'FAILED' && last.message && (
+                    <div className="text-rose-800 truncate max-w-[220px]" title={last.message}>
+                      {last.message}
+                    </div>
+                  )}
+                </div>
                 {isAdmin && (
                   <button
                     type="button"
-                    onClick={() => handleTrigger(job.jobName, jobTitle)}
+                    onClick={() => handleTrigger(job.jobName, title)}
                     disabled={isRunning}
-                    aria-label={`${t('runBtn')} ${jobTitle}`}
-                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.96] text-white text-xs font-semibold shadow-2xs transition-[transform,background-color] duration-100 disabled:opacity-50 cursor-pointer"
+                    aria-label={t('auRunAria', { job: title })}
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 text-[13px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
                   >
                     {isRunning ? (
                       <>
                         <CircleNotch weight="bold" className="w-3.5 h-3.5 animate-spin" />
-                        <span>{t('runningText')}</span>
+                        {t('runningText')}
                       </>
                     ) : (
                       <>
-                        <Play weight="fill" className="w-3 h-3 text-emerald-400" />
-                        <span>{t('runBtn')}</span>
+                        <Play weight="fill" className="w-3 h-3 text-brand-600" />
+                        {t('auRunNow')}
                       </>
                     )}
                   </button>
                 )}
               </div>
-            </div>
+            </section>
           );
         })}
       </div>
 
-      {/* 4. Execution History Table */}
-      <div className="rounded-2xl bg-white border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-              {t('executionHistory')}
-            </h2>
-            <p className="text-[11px] text-slate-400 mt-0.5">{t('executionHistorySub')}</p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400 font-medium">{t('filterLabel')}</span>
-            <BehavioralHistorySelect
-              selectWidth="200px"
-              value={selectedJobFilter}
-              onChange={(val) => setSelectedJobFilter(val)}
-              options={[
-                { value: 'ALL', label: t('allJobs') },
-                ...CRON_JOBS.map((j) => ({
-                  value: j.jobName,
-                  label: t(j.titleKey),
-                })),
-              ]}
-              storageKey="hrms_cron_filter_history"
-            />
-          </div>
+      {/* 4. Run history */}
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">{t('executionHistory')}</h2>
+          <p className="text-[13px] text-slate-500 mt-1">{t('executionHistorySub')}</p>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50/70 border-b border-slate-100 text-slate-400 uppercase font-semibold text-[10px] tracking-wider">
-              <tr>
-                <th className="px-6 py-3">{t('colJob')}</th>
-                <th className="px-6 py-3">{t('colStatus')}</th>
-                <th className="px-6 py-3">{t('colTimestamp')}</th>
-                <th className="px-6 py-3">{t('colJobDuration')}</th>
-                <th className="px-6 py-3 text-right">{t('colTrigger')}</th>
+        <FilterTabs
+          label={t('auFilterLabel')}
+          value={jobFilter}
+          onChange={setJobFilter}
+          tabs={[
+            { value: 'ALL', label: t('lvTabAll'), count: cronHistory.length },
+            ...CRON_JOBS.map((j) => ({
+              value: j.jobName,
+              label: t(j.titleKey),
+              count: cronHistory.filter((h) => h.jobName === j.jobName).length,
+            })),
+          ]}
+        />
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <table className="w-full min-w-[860px] text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-xs font-semibold text-slate-600 border-b border-slate-200">
+                <th scope="col" className="py-3 px-5">{t('colJob')}</th>
+                <th scope="col" className="py-3 px-5">{t('colStatus')}</th>
+                <th scope="col" className="py-3 px-5">{t('colTimestamp')}</th>
+                <th scope="col" className="py-3 px-5 text-right">{t('colJobDuration')}</th>
+                <th scope="col" className="py-3 px-5">{t('auColResult')}</th>
+                <th scope="col" className="py-3 px-5">{t('colTrigger')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 text-sm text-slate-700 tabular-nums">
               {filteredHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                  <td colSpan={6} className="py-10 px-5 text-center text-slate-500">
                     {t('noExecutions')}
                   </td>
                 </tr>
               ) : (
-                filteredHistory.map((item) => {
-                  const jobSpec = CRON_JOBS.find((j) => j.jobName === item.jobName);
-                  const isSuccess = item.status === 'SUCCESS';
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-6 py-3.5">
-                        <span className="font-bold text-slate-900">
-                          {jobSpec ? t(jobSpec.titleKey) : item.jobName}
-                        </span>
-                      </td>
-                      <td className="px-6 py-3.5">
-                        <span
-                          className={`inline-flex items-center gap-1.5 font-semibold text-[11px] px-2.5 py-0.5 rounded-full border ${
-                            isSuccess
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
-                              : 'bg-rose-50 text-rose-700 border-rose-200/80'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              isSuccess ? 'bg-emerald-500' : 'bg-rose-500'
-                            }`}
-                          />
-                          <span>{tStatus(item.status)}</span>
-                        </span>
-                      </td>
-                      <td className="px-6 py-3.5 font-mono text-slate-500 text-[11px] whitespace-nowrap tabular-nums">
-                        {item.executionTime}
-                      </td>
-                      <td className="px-6 py-3.5 font-mono text-slate-600 text-[11px] tabular-nums">
-                        {item.durationMs}ms
-                      </td>
-                      <td className="px-6 py-3.5 text-right font-mono text-[10px] text-slate-400">
-                        {item.triggeredBy === 'CRON_SCHEDULER'
-                          ? t('scheduledTrigger')
-                          : item.triggeredBy}
-                      </td>
-                    </tr>
-                  );
-                })
+                filteredHistory.map((item) => (
+                  <tr key={item.id}>
+                    <td className="py-3.5 px-5 font-semibold text-slate-900">{jobTitle(item.jobName)}</td>
+                    <td className="py-3.5 px-5">{runChip(item.status)}</td>
+                    <td className="py-3.5 px-5 whitespace-nowrap">{fmtTime(item.executionTime)}</td>
+                    <td className="py-3.5 px-5 text-right">{fmtDuration(item.durationMs)}</td>
+                    <td className="py-3.5 px-5 max-w-[320px] truncate text-slate-600" title={item.message}>
+                      {item.message || '—'}
+                    </td>
+                    <td className="py-3.5 px-5 text-slate-600">
+                      {item.triggeredBy === 'CRON_SCHEDULER' ? t('scheduledTrigger') : item.triggeredBy || '—'}
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
