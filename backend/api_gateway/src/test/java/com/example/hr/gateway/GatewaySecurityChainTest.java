@@ -16,6 +16,13 @@ import org.springframework.test.web.reactive.server.WebTestClient;
         "INTERNAL_API_KEY=test-internal-key",      // referenced by config-repo/api-gateway.yml
         "app.jwt.key-dir=target/test-jwt-keys"})   // never touch the real key folder
 class GatewaySecurityChainTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.example.hr.gateway.security.ActiveAccountService activeAccounts;
+    @org.junit.jupiter.api.BeforeEach
+    void activeAccountFixture() {
+        org.mockito.Mockito.when(activeAccounts.isActive(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(reactor.core.publisher.Mono.just(true));
+    }
 
     @LocalServerPort
     int port;

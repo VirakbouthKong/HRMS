@@ -30,8 +30,12 @@ public class AttendanceCorrectionAudit {
     private Attendance attendance;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "corrected_by", nullable = false)
+    @JoinColumn(name = "corrected_by")
     private Employee correctedBy;
+
+    @Column(name = "corrected_by_name")
+    private String correctedByName;
+    public String getCorrectedByName() { return correctedByName; }
 
     @Column(name = "correction_reason", nullable = false)
     private String correctionReason;
@@ -63,6 +67,10 @@ public class AttendanceCorrectionAudit {
         AttendanceCorrectionAudit audit = new AttendanceCorrectionAudit();
         audit.attendance = attendance;
         audit.correctedBy = correctedBy;
+        var authentication = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        audit.correctedByName = authentication == null ? "System" : authentication.getName();
+        if (authentication != null && authentication.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt)
+            audit.correctedByName = jwt.getClaimAsString("username");
         audit.correctionReason = reason;
         audit.previousCheckIn = prevCheckIn;
         audit.previousCheckOut = prevCheckOut;

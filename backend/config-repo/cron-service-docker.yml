@@ -1,4 +1,7 @@
 # CRON inside Docker: Operation is reached by its container name.
+spring:
+  mail:
+    host: ${MAIL_HOST:mailpit}
 operation:
   service:
     base-url: http://operation-service:8083

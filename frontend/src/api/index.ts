@@ -74,28 +74,19 @@ export interface JobTitle {
   jobId: number;
   jobTitle: string;
   description?: string;
-  minSalary?: number;
-  maxSalary?: number;
   departmentId?: number;
   departmentName?: string;
 }
 
+/** Matches operation-service JobHistoryResponse. Newest first; the current job has no endDate. */
 export interface JobHistoryItem {
-  historyId?: number;
-  employeeId: number;
   jobTitle: string;
   departmentName: string;
-  startDate: string;
+  startedDate: string;
   endDate?: string | null;
+  remark?: string | null;
 }
 
-export interface AttendanceCorrectionPayload {
-  checkIn?: string;
-  checkOut?: string;
-  status?: string;
-  lateMinutes?: number;
-  reason: string;
-}
 
 export interface LeaveSubmitPayload {
   leaveType: string;
@@ -161,13 +152,17 @@ export const authApi = {
   },
 
   /**
-   * Retrieve logged-in user profile photo as binary Blob
+   * Retrieve logged-in user profile photo as binary Blob.
+   * Without an uploaded photo the gateway returns a generated SVG initials avatar and sets
+   * `X-Default-Avatar: true`; uploads are only JPG/PNG/WebP, so SVG also means "default".
    */
-  getProfilePhoto: async (): Promise<Blob> => {
+  getProfilePhoto: async (): Promise<{ blob: Blob; isDefault: boolean }> => {
     const res = await apiClient.get<Blob>('/api/auth/me/photo', {
       responseType: 'blob',
     });
-    return res.data;
+    const headerSaysDefault = String(res.headers?.['x-default-avatar'] ?? '').toLowerCase() === 'true';
+    const contentType = String(res.headers?.['content-type'] ?? res.data?.type ?? '').toLowerCase();
+    return { blob: res.data, isDefault: headerSaysDefault || contentType.includes('svg') };
   },
 
   /**
@@ -234,8 +229,149 @@ export const authApi = {
 };
 
 // ==========================================
+// 1b. User Accounts & Roles API (auth-service; ADMIN only at the gateway)
+// ==========================================
+
+export interface UserAccountSummary {
+  accountId: number;
+  userName: string;
+  email: string;
+  status: string; // 'ACTIVE' signs in; anything else is blocked
+  isFirstLogin: boolean;
+  employeeId: number | null;
+  roleName: string;
+  createdDate?: string;
+  updatedDate?: string;
+}
+
+export interface RoleSummary {
+  roleId: number;
+  roleName: string;
+  description?: string;
+}
+
+export interface CreateAccountPayload {
+  userName: string;
+  userPwd: string;
+  email: string;
+  status: string;
+  employeeId: number;
+  roleId: number;
+}
+
+export interface UpdateAccountPayload {
+  userName: string;
+  email: string;
+  status: string;
+  roleId: number;
+}
+
+export const accountApi = {
+  getAll: async (): Promise<UserAccountSummary[]> => {
+    const res = await apiClient.get<UserAccountSummary[]>('/api/accounts');
+    return res.data;
+  },
+  create: async (payload: CreateAccountPayload): Promise<AuthApiResponse> => {
+    const res = await apiClient.post<AuthApiResponse>('/api/accounts', payload);
+    return res.data;
+  },
+  update: async (accountId: number, payload: UpdateAccountPayload): Promise<AuthApiResponse> => {
+    const res = await apiClient.put<AuthApiResponse>(`/api/accounts/${accountId}`, payload);
+    return res.data;
+  },
+  remove: async (accountId: number): Promise<AuthApiResponse> => {
+    const res = await apiClient.delete<AuthApiResponse>(`/api/accounts/${accountId}`);
+    return res.data;
+  },
+  getById: async (accountId: number): Promise<UserAccountSummary> => {
+    const res = await apiClient.get<UserAccountSummary>(`/api/accounts/${accountId}`);
+    return res.data;
+  },
+};
+
+/**
+ * Employee icons (any signed-in user). Needs the token, so load via fetch + object URL, not <img src>.
+ * `isDefault` is true for the generated initials/silhouette picture (X-Default-Avatar, or SVG).
+ */
+export const photoApi = {
+  getEmployeePhoto: async (employeeId: number): Promise<{ blob: Blob; isDefault: boolean }> => {
+    const res = await apiClient.get<Blob>(`/api/photos/employees/${employeeId}`, { responseType: 'blob' });
+    const headerSaysDefault = String(res.headers?.['x-default-avatar'] ?? '').toLowerCase() === 'true';
+    const contentType = String(res.headers?.['content-type'] ?? res.data?.type ?? '').toLowerCase();
+    return { blob: res.data, isDefault: headerSaysDefault || contentType.includes('svg') };
+  },
+};
+
+export const roleApi = {
+  getAll: async (): Promise<RoleSummary[]> => {
+    const res = await apiClient.get<RoleSummary[]>('/api/roles');
+    return res.data;
+  },
+  create: async (payload: { roleName: string; description: string }): Promise<AuthApiResponse> => {
+    const res = await apiClient.post<AuthApiResponse>('/api/roles', payload);
+    return res.data;
+  },
+  update: async (roleId: number, payload: { roleName: string; description: string }): Promise<AuthApiResponse> => {
+    const res = await apiClient.put<AuthApiResponse>(`/api/roles/${roleId}`, payload);
+    return res.data;
+  },
+  remove: async (roleId: number): Promise<AuthApiResponse> => {
+    const res = await apiClient.delete<AuthApiResponse>(`/api/roles/${roleId}`);
+    return res.data;
+  },
+  getById: async (roleId: number): Promise<RoleSummary> => {
+    const res = await apiClient.get<RoleSummary>(`/api/roles/${roleId}`);
+    return res.data;
+  },
+};
+
+// ==========================================
+// 1c. Gateway configuration
+// ==========================================
+
+/** The `frontend` section of config-repo/frontend.yml (public, no token). */
+export interface PublicConfig {
+  appName?: string;
+  features?: { photoUpload?: boolean; payroll?: boolean; reports?: boolean; [k: string]: boolean | undefined };
+  limits?: {
+    photoMaxBytes?: number;
+    photoTypes?: string;
+    passwordMinLength?: number;
+    otpValidMinutes?: number;
+    otpResendSeconds?: number;
+  };
+}
+
+export interface ConfigRefreshResult {
+  success: boolean;
+  message: string;
+  changed?: string[];
+}
+
+export const configApi = {
+  /** GET /api/public/config (no token needed). */
+  getPublic: async (): Promise<PublicConfig> => {
+    const res = await apiClient.get<PublicConfig>('/api/public/config');
+    return res.data;
+  },
+  /** POST /api/admin/config/refresh (ADMIN). Reloads gateway routes, access rules and frontend settings. */
+  refresh: async (): Promise<ConfigRefreshResult> => {
+    const res = await apiClient.post<ConfigRefreshResult>('/api/admin/config/refresh');
+    return res.data;
+  },
+};
+
+// ==========================================
 // 2. Employee API
 // ==========================================
+
+export interface MyContactDetails {
+  phoneNumber?: string | null;
+  address?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  emergencyContactRelation?: string | null;
+}
 
 export const employeeApi = {
   getAll: async (params?: { status?: string; departmentId?: number }): Promise<Employee[]> => {
@@ -263,6 +399,11 @@ export const employeeApi = {
     return res.data;
   },
 
+  /** PATCH /api/employees/me/contact: the signed-in employee's own contact details only. */
+  updateMyContact: async (data: MyContactDetails): Promise<Employee & MyContactDetails> => {
+    const res = await apiClient.patch<Employee & MyContactDetails>('/api/employees/me/contact', data);
+    return res.data;
+  },
   getMyProfile: async (): Promise<Employee> => {
     const res = await apiClient.get<Employee>('/api/employees/me');
     return res.data;
@@ -386,29 +527,15 @@ export const attendanceApi = {
     return res.data;
   },
 
-  requestCorrection: async (
-    attendanceId: number,
-    data: AttendanceCorrectionPayload | any
-  ): Promise<AttendanceRecord> => {
-    const res = await apiClient.post<AttendanceRecord>(
-      `/api/attendance/${attendanceId}/corrections`,
-      data
-    );
-    return res.data;
-  },
 
-  getCorrectionHistory: async (attendanceId: number): Promise<AttendanceCorrection[]> => {
-    const res = await apiClient.get<AttendanceCorrection[]>(
-      `/api/attendance/${attendanceId}/corrections`
-    );
-    return res.data;
-  },
 };
 
-export const attendanceCorrectionApi = {
-  correct: attendanceApi.requestCorrection,
-  getHistory: attendanceApi.getCorrectionHistory,
+export const attendanceRequestApi = {
+  getAll: async (): Promise<AttendanceCorrection[]> => (await apiClient.get('/api/attendance-requests')).data,
+  submit: async (data: { attendanceId: number; checkIn: string; checkOut?: string; reason: string }): Promise<AttendanceCorrection> => (await apiClient.post('/api/attendance-requests', data)).data,
+  review: async (id: number, status: 'APPROVED' | 'REJECTED'): Promise<AttendanceCorrection> => (await apiClient.patch('/api/attendance-requests/' + id, { status })).data,
 };
+
 
 // ==========================================
 // 6. Leave API
@@ -464,6 +591,7 @@ export const leaveApi = {
 // ==========================================
 
 export const payrollApi = {
+  markPaid: async (id: number): Promise<any> => (await apiClient.patch('/api/payroll/' + id + '/paid')).data,
   getAll: async (period?: string): Promise<PayrollRecord[]> => {
     const targetPeriod = period || new Date().toISOString().substring(0, 7);
     const res = await apiClient.get<PayrollRecord[]>('/api/payroll', {

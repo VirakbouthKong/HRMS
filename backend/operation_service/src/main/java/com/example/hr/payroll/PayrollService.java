@@ -71,8 +71,10 @@ public class PayrollService {
         List<Employee> activeEmployees = employeeRepository.findAll();
 
         return activeEmployees.stream().map(emp -> {
-            recordRepository.findByEmployeeIdAndPeriod(emp.getEmployeeId(), startDate)
-                    .ifPresent(recordRepository::delete);
+            PayrollRecord existing = recordRepository.findByEmployeeIdAndPeriod(emp.getEmployeeId(), startDate).orElse(null);
+            if (existing != null && "PAID".equals(existing.getStatus())) return toRecordResponse(existing);
+            if (existing != null) { recordRepository.delete(existing); recordRepository.flush(); }
+            if (emp.getStatus() != com.example.hr.employee.EmployeeStatus.ACTIVE) return null;
             PayrollProfile profile = profileRepository.findByEmployeeId(emp.getEmployeeId()).orElse(null);
             if (profile == null) {
                 return null; // skip if no salary profile
@@ -89,6 +91,7 @@ public class PayrollService {
             List<LeaveRequest> leaves = leaveRepository.findByEmployeeEmployeeIdAndStatus(emp.getEmployeeId(), LeaveStatus.APPROVED);
             int unpaidLeaveDays = 0;
             for (LeaveRequest lr : leaves) {
+                if (lr.isPaid()) continue;
                 // check leave overlap
                 LocalDate maxStart = lr.getStartDate().isAfter(startDate) ? lr.getStartDate() : startDate;
                 LocalDate minEnd = lr.getEndDate().isBefore(endDate) ? lr.getEndDate() : endDate;
@@ -121,6 +124,13 @@ public class PayrollService {
                 .map(this::toRecordResponse)
                 .toList();
     }
+
+    public PayrollRecordResponse markPaid(Integer payrollId) {
+        PayrollRecord record = recordRepository.findById(payrollId).orElseThrow(() ->
+                new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Payroll record not found"));
+        record.markPaid();
+        return toRecordResponse(record);
+    }
     
     @Transactional(readOnly = true)
     public List<PayrollRecordResponse> getPayrollsByPeriod(YearMonth period) {
@@ -152,7 +162,7 @@ public class PayrollService {
                 record.getLateDeduction(),
                 record.getUnpaidLeaveDays(),
                 record.getUnpaidLeaveDeduction(),
-                record.getNetSalary()
+                record.getNetSalary(), record.getStatus(), record.getPaidDate()
         );
     }
 }

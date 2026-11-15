@@ -23,8 +23,8 @@ public class RoleController {
     }
 
     @PostMapping
-    public ApiResponse createRole(@Valid @RequestBody CreateRoleRequest request) {
-        return roleService.createRole(request);
+    public ResponseEntity<ApiResponse> createRole(@Valid @RequestBody CreateRoleRequest request) {
+        return ActionReplies.from(roleService.createRole(request));
     }
 
     @GetMapping
@@ -43,13 +43,13 @@ public class RoleController {
     }
 
     @PutMapping("/{id}")
-    public ApiResponse updateRole(@PathVariable Integer id,
-                                  @RequestBody UpdateRoleRequest request) {
-        return roleService.updateRole(id, request);
+    public ResponseEntity<ApiResponse> updateRole(@PathVariable Integer id,
+                                  @Valid @RequestBody UpdateRoleRequest request) {
+        return ActionReplies.from(roleService.updateRole(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse deleteRole(@PathVariable Integer id) {
-        return roleService.deleteRole(id);
+    public ResponseEntity<ApiResponse> deleteRole(@PathVariable Integer id) {
+        return ActionReplies.from(roleService.deleteRole(id));
     }
 }

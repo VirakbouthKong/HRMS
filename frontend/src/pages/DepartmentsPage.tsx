@@ -1,24 +1,30 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Buildings,
-  Plus,
-  MagnifyingGlass,
-  Trash,
-  PencilSimple,
-  X,
-  WarningCircle,
   ArrowRight,
-  ShieldCheck,
-  User,
   Briefcase,
+  Buildings,
   CheckCircle,
   CircleNotch,
+  MagnifyingGlass,
+  PencilSimple,
+  Plus,
+  ShieldCheck,
+  Trash,
+  User,
+  UsersThree,
+  WarningCircle,
+  X,
 } from '@phosphor-icons/react';
 import { useHrmsStore } from '../store/useHrmsStore';
 import { Department, JobTitle } from '../types';
 import { BehavioralHistorySelect } from '../components/ui/behavioral-history-select';
 import { Modal, Drawer } from '../components/ui/modal';
 import { useI18n } from '../i18n/useI18n';
+import { hasPermission } from '../utils/rbac';
+import { MetricCard } from '../components/dashboard/MetricCard';
+import { InitialsAvatar } from '../components/dashboard/DashboardCard';
+import { departmentApi, jobApi } from '../api';
+import { FilterTabs } from '../components/ui/filter-tabs';
 
 export const DepartmentsPage: React.FC = () => {
   const {
@@ -30,6 +36,7 @@ export const DepartmentsPage: React.FC = () => {
     deleteDepartment,
     addJobTitle,
     deleteJobTitle,
+    updateJobTitle,
     departmentsView: activeView,
     setDepartmentsView: setActiveView,
     currentUser,
@@ -57,18 +64,17 @@ export const DepartmentsPage: React.FC = () => {
   // Department Form state
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
-  const [formBudget, setFormBudget] = useState('35000');
-  const [formLeadId, setFormLeadId] = useState<number | ''>('');
   const [deptFormError, setDeptFormError] = useState<string | null>(null);
 
   // Job Title Form state
   const [isJobModalOpen, setIsJobModalOpen] = useState(false);
   const [jobTitleInput, setJobTitleInput] = useState('');
   const [jobDeptIdInput, setJobDeptIdInput] = useState<number>(1);
-  const [jobMinSalaryInput, setJobMinSalaryInput] = useState('1800');
-  const [jobMaxSalaryInput, setJobMaxSalaryInput] = useState('3200');
   const [jobDescInput, setJobDescInput] = useState('');
   const [jobError, setJobError] = useState<string | null>(null);
+  // Set when the job dialog edits an existing job instead of adding one.
+  const [editingJob, setEditingJob] = useState<JobTitle | null>(null);
+  const canEditJobs = hasPermission(currentUser.role, 'JOB_TITLE_EDIT');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const isManager = currentUser.role === 'ROLE_ADMIN' || currentUser.role === 'ROLE_HR';
@@ -77,12 +83,9 @@ export const DepartmentsPage: React.FC = () => {
   const departmentsWithLiveStats = useMemo(() => {
     return departments.map((dept) => {
       const assigned = employees.filter((e) => e.departmentId === dept.departmentId);
-      const lead = employees.find((e) => e.employeeId === dept.leadEmployeeId);
       return {
         ...dept,
         headCount: assigned.length,
-        leadName: lead ? `${lead.firstName} ${lead.lastName}` : dept.leadName || t('unassigned'),
-        leadAvatar: lead ? lead.avatarUrl : dept.leadAvatar,
       };
     });
   }, [departments, employees, t]);
@@ -94,8 +97,7 @@ export const DepartmentsPage: React.FC = () => {
     return departmentsWithLiveStats.filter(
       (d) =>
         d.departmentName.toLowerCase().includes(q) ||
-        (d.description && d.description.toLowerCase().includes(q)) ||
-        (d.leadName && d.leadName.toLowerCase().includes(q))
+        (d.description && d.description.toLowerCase().includes(q))
     );
   }, [departmentsWithLiveStats, searchQuery]);
 
@@ -117,8 +119,6 @@ export const DepartmentsPage: React.FC = () => {
   const handleOpenCreate = () => {
     setFormName('');
     setFormDesc('');
-    setFormBudget('40000');
-    setFormLeadId(employees[0]?.employeeId || '');
     setEditingDept(null);
     setDeptFormError(null);
     setIsCreateModalOpen(true);
@@ -128,10 +128,38 @@ export const DepartmentsPage: React.FC = () => {
     setEditingDept(dept);
     setFormName(dept.departmentName);
     setFormDesc(dept.description);
-    setFormBudget(dept.budget ? String(dept.budget) : '35000');
-    setFormLeadId(dept.leadEmployeeId || employees[0]?.employeeId || '');
     setDeptFormError(null);
     setIsCreateModalOpen(true);
+    // Swap in the latest copy (GET /api/departments/{id}) so a newer edit isn't overwritten.
+    departmentApi
+      .getById(dept.departmentId)
+      .then((fresh: any) => {
+        if (fresh && fresh.departmentId === dept.departmentId) {
+          setFormName(fresh.departmentName ?? dept.departmentName);
+          setFormDesc(fresh.description ?? dept.description);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const openEditJob = (job: JobTitle) => {
+    setEditingJob(job);
+    setJobTitleInput(job.jobTitle);
+    setJobDeptIdInput(job.departmentId || departments[0]?.departmentId || 1);
+    setJobDescInput(job.description || '');
+    setJobError(null);
+    setIsJobModalOpen(true);
+    // Swap in the latest copy (GET /api/jobs/{id}).
+    jobApi
+      .getById(job.jobId)
+      .then((fresh: any) => {
+        if (fresh && fresh.jobId === job.jobId) {
+          setJobTitleInput(fresh.jobTitle ?? job.jobTitle);
+          setJobDeptIdInput(fresh.departmentId ?? job.departmentId ?? departments[0]?.departmentId ?? 1);
+          setJobDescInput(fresh.description ?? job.description ?? '');
+        }
+      })
+      .catch(() => {});
   };
 
   const handleSaveDepartment = async (e: React.FormEvent) => {
@@ -141,9 +169,6 @@ export const DepartmentsPage: React.FC = () => {
       return;
     }
 
-    const leadId = typeof formLeadId === 'number' ? formLeadId : undefined;
-    const lead = employees.find((emp) => emp.employeeId === leadId);
-
     setIsSubmitting(true);
     setDeptFormError(null);
 
@@ -151,18 +176,10 @@ export const DepartmentsPage: React.FC = () => {
       ? await updateDepartment(editingDept.departmentId, {
           departmentName: formName.trim(),
           description: formDesc.trim(),
-          budget: Number(formBudget) || 0,
-          leadEmployeeId: leadId,
-          leadName: lead ? `${lead.firstName} ${lead.lastName}` : undefined,
-          leadAvatar: lead?.avatarUrl,
         })
       : await addDepartment({
           departmentName: formName.trim(),
           description: formDesc.trim(),
-          budget: Number(formBudget) || 0,
-          leadEmployeeId: leadId,
-          leadName: lead ? `${lead.firstName} ${lead.lastName}` : t('unassigned'),
-          leadAvatar: lead?.avatarUrl,
         });
 
     setIsSubmitting(false);
@@ -199,21 +216,33 @@ export const DepartmentsPage: React.FC = () => {
       setJobError(t('enterJobTitleError'));
       return;
     }
-    const minVal = jobMinSalaryInput ? Number(jobMinSalaryInput) : undefined;
-    const maxVal = jobMaxSalaryInput ? Number(jobMaxSalaryInput) : undefined;
-    if (minVal !== undefined && maxVal !== undefined && minVal > maxVal) {
-      setJobError(t('invalidSalaryBandErr'));
+
+    const dept = departments.find((d) => d.departmentId === Number(jobDeptIdInput));
+
+    if (editingJob) {
+      setIsSubmitting(true);
+      const res = await updateJobTitle(editingJob.jobId, {
+        jobTitle: jobTitleInput.trim(),
+        departmentId: Number(jobDeptIdInput),
+        description: jobDescInput.trim() || undefined,
+      });
+      setIsSubmitting(false);
+      if (res.success) {
+        setIsJobModalOpen(false);
+        setEditingJob(null);
+        setToastMessage(t('jbUpdatedToast', { title: jobTitleInput.trim() }));
+        setTimeout(() => setToastMessage(null), 4000);
+      } else {
+        setJobError(res.error === 'FORBIDDEN' ? t('jbNoPermission') : res.error || 'Failed to update job title');
+      }
       return;
     }
 
-    const dept = departments.find((d) => d.departmentId === Number(jobDeptIdInput));
     setIsSubmitting(true);
     const result = await addJobTitle({
       jobTitle: jobTitleInput.trim(),
       departmentId: Number(jobDeptIdInput),
       departmentName: dept?.departmentName || '',
-      minSalary: Number(jobMinSalaryInput) || undefined,
-      maxSalary: Number(jobMaxSalaryInput) || undefined,
       description: jobDescInput.trim() || undefined,
     });
     setIsSubmitting(false);
@@ -254,125 +283,79 @@ export const DepartmentsPage: React.FC = () => {
     return employees.filter((e) => e.departmentId === selectedDeptForRoster.departmentId);
   }, [selectedDeptForRoster, employees]);
 
+  const avgTeamSize = departments.length ? Math.round((totalEmployeesCount / departments.length) * 10) / 10 : 0;
+  const primaryBtn =
+    'inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none';
+  const iconBtn =
+    'w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-500 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none';
+
   return (
-    <div className="space-y-6 pb-12 select-none">
-      {/* 1. Header & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-900">{t('orgJobsTitle')}</h2>
-          <p className="text-xs text-slate-500 mt-0.5">{t('orgJobsSub')}</p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Segmented View Switcher */}
-          <div className="p-1 rounded-xl bg-slate-100 border border-slate-200/60 flex items-center gap-1 text-xs font-semibold">
-            <button
-              type="button"
-              onClick={() => setActiveView('departments')}
-              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                activeView === 'departments'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              {t('tabDepartments', { count: departments.length })}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveView('jobs')}
-              className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
-                activeView === 'jobs'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              {t('tabJobTitles', { count: jobs.length })}
-            </button>
-          </div>
-
-          {isManager &&
-            (activeView === 'departments' ? (
-              <button
-                type="button"
-                onClick={handleOpenCreate}
-                className="inline-flex items-center gap-2 min-h-[38px] px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs active:scale-[0.98] transition-[transform,background-color] cursor-pointer"
-              >
-                <Plus weight="bold" className="w-4 h-4" />
-                <span>{t('createDepartment')}</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setJobTitleInput('');
-                  setJobDescInput('');
-                  setJobMinSalaryInput('1800');
-                  setJobMaxSalaryInput('3200');
-                  setJobDeptIdInput(departments[0]?.departmentId || 1);
-                  setJobError(null);
-                  setIsJobModalOpen(true);
-                }}
-                className="inline-flex items-center gap-2 min-h-[38px] px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-xs active:scale-[0.98] transition-[transform,background-color] cursor-pointer"
-              >
-                <Plus weight="bold" className="w-4 h-4" />
-                <span>{t('addJobTitle')}</span>
-              </button>
-            ))}
-        </div>
+    <div className="space-y-6 pb-12">
+      {/* 1. Summary */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <MetricCard
+          title={t('metricTotalDivisions')}
+          icon={Buildings}
+          value={departments.length}
+          subtitle={t('metricTotalDivisionsSub')}
+        />
+        <MetricCard
+          title={t('metricConfiguredRoles')}
+          icon={Briefcase}
+          value={jobs.length}
+          subtitle={t('metricConfiguredRolesSub')}
+        />
+        <MetricCard
+          title={t('metricAssignedStaff')}
+          icon={User}
+          value={totalEmployeesCount}
+          subtitle={t('metricAssignedStaffSub')}
+        />
+        <MetricCard title={t('orgAvgTeam')} icon={UsersThree} value={avgTeamSize} subtitle={t('orgAvgTeamSub')} />
       </div>
 
-      {/* 2. Top Metric Strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-            {t('metricTotalDivisions')}
-          </span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
-            {departments.length}
-          </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">{t('metricTotalDivisionsSub')}</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-            {t('metricConfiguredRoles')}
-          </span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
-            {jobs.length}
-          </div>
-          <span className="text-[10px] text-blue-600 font-medium mt-1 block">
-            {t('metricConfiguredRolesSub')}
-          </span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-            {t('metricAssignedStaff')}
-          </span>
-          <div className="text-2xl font-bold text-slate-900 mt-1 font-mono tabular-nums">
-            {totalEmployeesCount}
-          </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">{t('metricAssignedStaffSub')}</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-white border border-slate-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">
-            {t('metricGovernance')}
-          </span>
-          <div className="text-sm font-bold text-slate-800 mt-2 flex items-center gap-1.5">
-            <ShieldCheck weight="bold" className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{t('strictDeptMapping')}</span>
-          </div>
-          <span className="text-[10px] text-slate-400 mt-1 block">{t('flywayV5Enforced')}</span>
-        </div>
+      {/* 2. View tabs + primary action */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <FilterTabs
+          label={t('orgViewLabel')}
+          value={activeView}
+          onChange={setActiveView}
+          className="flex-1 min-w-[260px]"
+          tabs={[
+            { value: 'departments', label: t('orgTabDepartments'), count: departments.length },
+            { value: 'jobs', label: t('orgTabJobs'), count: jobs.length },
+          ]}
+        />
+        {isManager &&
+          (activeView === 'departments' ? (
+            <button type="button" onClick={handleOpenCreate} className={primaryBtn}>
+              <Plus weight="bold" className="w-4 h-4" />
+              {t('createDepartment')}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setJobTitleInput('');
+                setJobDescInput('');
+                setJobDeptIdInput(departments[0]?.departmentId || 1);
+                setJobError(null);
+                setEditingJob(null);
+                setIsJobModalOpen(true);
+              }}
+              className={primaryBtn}
+            >
+              <Plus weight="bold" className="w-4 h-4" />
+              {t('addJobTitle')}
+            </button>
+          ))}
       </div>
 
-      {/* Safety Alert Banner if Deletion blocked */}
       {deleteError && (
         <div
           role="alert"
           aria-live="polite"
-          className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-start justify-between gap-3 animate-fadeIn"
+          className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800 flex items-start justify-between gap-3 animate-fadeIn"
         >
           <div className="flex items-center gap-2">
             <WarningCircle weight="fill" className="w-4 h-4 text-rose-600 flex-shrink-0" />
@@ -382,7 +365,7 @@ export const DepartmentsPage: React.FC = () => {
             type="button"
             onClick={() => setDeleteError(null)}
             aria-label={t('closeDialog')}
-            className="text-rose-500 hover:text-rose-700 p-1 rounded cursor-pointer"
+            className="text-rose-700 hover:text-rose-900 p-1 rounded cursor-pointer"
           >
             <X weight="bold" className="w-3.5 h-3.5" />
           </button>
@@ -393,236 +376,198 @@ export const DepartmentsPage: React.FC = () => {
         <div
           role="status"
           aria-live="polite"
-          className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2 animate-fadeIn"
+          className="p-3 rounded-lg bg-brand-50 border border-brand-200 text-sm text-brand-800 flex items-center gap-2 animate-fadeIn"
         >
-          <CheckCircle weight="fill" className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+          <CheckCircle weight="fill" className="w-4 h-4 flex-shrink-0" />
           <span className="font-semibold">{toastMessage}</span>
         </div>
       )}
 
-      {/* VIEW A: DEPARTMENTS GRID */}
+      {/* VIEW A: DEPARTMENTS */}
       {activeView === 'departments' && (
         <>
-          {/* Search Filter */}
-          <div className="flex items-center gap-3 bg-white px-3.5 py-2.5 rounded-xl border border-slate-200/70 shadow-2xs">
-            <MagnifyingGlass weight="bold" className="w-4 h-4 text-slate-400 shrink-0" />
+          <label className="flex items-center gap-2 h-10 max-w-md px-3 rounded-lg border border-slate-200 bg-white text-slate-500 focus-within:ring-2 focus-within:ring-brand-500">
+            <MagnifyingGlass weight="bold" className="w-4 h-4 shrink-0" />
+            <span className="sr-only">{t('searchDeptsPlaceholder')}</span>
             <input
-              type="text"
-              aria-label={t('searchDeptsPlaceholder')}
+              type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('searchDeptsPlaceholder')}
-              className="w-full text-sm sm:text-xs bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 rounded-lg text-slate-800 placeholder:text-slate-400"
+              className="flex-1 min-w-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-500"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer px-1.5 py-0.5 rounded"
+                className="text-[13px] font-semibold text-slate-600 hover:text-slate-900 px-1.5 py-0.5 rounded cursor-pointer"
               >
                 {t('clearBtn')}
               </button>
             )}
-          </div>
+          </label>
 
-          {/* Departments Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredDepartments.map((dept) => {
-              const deptJobsCount = jobs.filter((j) => j.departmentId === dept.departmentId).length;
-              return (
-                <div
-                  key={dept.departmentId}
-                  className="rounded-2xl bg-white border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between hover:shadow-md hover:border-slate-300 transition-[box-shadow,border-color] duration-150 relative group"
-                >
-                  <div>
+          {filteredDepartments.length === 0 ? (
+            <p className="py-10 text-center text-sm text-slate-500">{t('orgNoDeptsMatch')}</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredDepartments.map((dept) => {
+                const deptJobsCount = jobs.filter((j) => j.departmentId === dept.departmentId).length;
+                return (
+                  <section
+                    key={dept.departmentId}
+                    className="bg-white rounded-xl border border-slate-200 p-5 flex flex-col gap-4 min-w-0"
+                  >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 shadow-2xs">
-                          <Buildings weight="duotone" className="w-5 h-5" />
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0">
+                          <Buildings weight="regular" className="w-5 h-5" />
                         </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900 tracking-tight leading-snug">
-                            {dept.departmentName}
-                          </h3>
-                          <span className="text-[11px] font-mono text-slate-400">
-                            #{dept.departmentId} • {deptJobsCount} {t('catJobs').toLowerCase()}
-                          </span>
+                        <div className="min-w-0">
+                          <h2 className="text-base font-semibold text-slate-900 truncate">{dept.departmentName}</h2>
+                          <span className="text-[13px] text-slate-500">{t('orgJobsCount', { count: deptJobsCount })}</span>
                         </div>
                       </div>
 
                       {isManager && (
-                        <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-0.5 shrink-0">
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(dept)}
                             aria-label={`${t('editDeptTooltip')} ${dept.departmentName}`}
                             title={t('editDeptTooltip')}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                            className={`${iconBtn} hover:text-brand-700 hover:bg-brand-50`}
                           >
-                            <PencilSimple weight="bold" className="w-3.5 h-3.5" />
+                            <PencilSimple weight="bold" className="w-4 h-4" />
                           </button>
                           <button
                             type="button"
                             onClick={() => setConfirmDeleteDept(dept)}
                             aria-label={`${t('deleteDeptTooltip')} ${dept.departmentName}`}
                             title={t('deleteDeptTooltip')}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none cursor-pointer"
+                            className={`${iconBtn} hover:text-rose-700 hover:bg-rose-50`}
                           >
-                            <Trash weight="bold" className="w-3.5 h-3.5" />
+                            <Trash weight="bold" className="w-4 h-4" />
                           </button>
                         </div>
                       )}
                     </div>
 
-                    <p className="text-xs text-slate-500 mt-3 line-clamp-2 leading-relaxed">
+                    <p className="text-sm text-slate-600 line-clamp-2 leading-relaxed">
                       {dept.description || t('noDescProvided')}
                     </p>
-                  </div>
 
-                  <div className="mt-5 pt-3 border-t border-slate-100 space-y-2.5">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">{t('deptLeadLabel')}</span>
-                      <div className="flex items-center gap-1.5 font-medium text-slate-700">
-                        {dept.leadAvatar ? (
-                          <img
-                            src={dept.leadAvatar}
-                            alt=""
-                            width={16}
-                            height={16}
-                            className="w-4 h-4 rounded-full object-cover"
-                          />
-                        ) : (
-                          <User weight="bold" className="w-3.5 h-3.5 text-slate-400" />
-                        )}
-                        <span className="truncate max-w-[120px]">{dept.leadName}</span>
+                    <dl className="mt-auto pt-3 border-t border-slate-100 flex flex-col gap-2.5 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <dt className="text-slate-500">{t('activeRosterLabel')}</dt>
+                        <dd>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDeptForRoster(dept)}
+                            className="inline-flex items-center gap-1 font-semibold text-brand-700 hover:text-brand-800 hover:underline rounded cursor-pointer tabular-nums focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+                          >
+                            {dept.headCount} {t('gsPersonnelUnit')}
+                            <ArrowRight weight="bold" className="w-3.5 h-3.5" />
+                          </button>
+                        </dd>
                       </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">{t('activeRosterLabel')}</span>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDeptForRoster(dept)}
-                        className="font-mono font-semibold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
-                      >
-                        <span>
-                          {dept.headCount} {t('gsPersonnelUnit')}
-                        </span>
-                        <ArrowRight weight="bold" className="w-3 h-3" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-400">{t('monthlyBudgetLabel')}</span>
-                      <span className="font-mono font-bold text-slate-800 tabular-nums">
-                        ${(dept.budget || 35000).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                    </dl>
+                  </section>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 
-      {/* VIEW B: JOB TITLES DIRECTORY */}
+      {/* VIEW B: JOB TITLES */}
       {activeView === 'jobs' && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-semibold">{t('filterDeptLabel')}</span>
-              <BehavioralHistorySelect
-                placeholder={t('allDepartments')}
-                options={[
-                  { value: 'ALL', label: t('allDepartments') },
-                  ...departments.map((d) => ({
-                    value: String(d.departmentId),
-                    label: d.departmentName,
-                  })),
-                ]}
-                value={selectedJobDeptFilter}
-                onChange={(val) => setSelectedJobDeptFilter(val)}
-                selectWidth="220px"
-                storageKey="hrms_job_dept_filter"
-              />
-            </div>
-
-            <div className="text-xs text-slate-400 font-mono">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <BehavioralHistorySelect
+              label={t('filterDeptLabel')}
+              placeholder={t('allDepartments')}
+              options={[
+                { value: 'ALL', label: t('allDepartments') },
+                ...departments.map((d) => ({ value: String(d.departmentId), label: d.departmentName })),
+              ]}
+              value={selectedJobDeptFilter}
+              onChange={(val) => setSelectedJobDeptFilter(val)}
+              selectWidth="240px"
+              storageKey="hrms_job_dept_filter"
+            />
+            <span className="text-[13px] text-slate-500">
               {t('showingJobsCount', { shown: filteredJobs.length, total: jobs.length })}
-            </div>
+            </span>
           </div>
 
-          <div className="rounded-2xl bg-white border border-slate-200/80 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50/70 border-b border-slate-100 text-slate-400 uppercase font-semibold text-[10px] tracking-wider">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+            <table className="w-full min-w-[720px] text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-xs font-semibold text-slate-600 border-b border-slate-200">
+                  <th scope="col" className="py-3 px-5">{t('colJobTitle')}</th>
+                  <th scope="col" className="py-3 px-5">{t('colDepartment')}</th>
+                  <th scope="col" className="py-3 px-5 text-right">{t('colAssignedStaff')}</th>
+                  {isManager && (
+                    <th scope="col" className="py-3 px-5 text-right">
+                      <span className="sr-only">{t('colActions')}</span>
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm text-slate-700 tabular-nums">
+                {filteredJobs.length === 0 ? (
                   <tr>
-                    <th className="px-6 py-3.5">{t('colJobTitle')}</th>
-                    <th className="px-6 py-3.5">{t('colDepartment')}</th>
-                    <th className="px-6 py-3.5">{t('colSalaryBand')}</th>
-                    <th className="px-6 py-3.5">{t('colAssignedStaff')}</th>
-                    {isManager && <th className="px-6 py-3.5 text-right">{t('colActions')}</th>}
+                    <td colSpan={4} className="py-10 px-5 text-center text-slate-500">
+                      {t('noJobsMatch')}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredJobs.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
-                        {t('noJobsMatch')}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredJobs.map((job) => {
-                      const assignedStaff = employees.filter(
-                        (e) =>
-                          (job.departmentId === undefined || e.departmentId === job.departmentId) &&
-                          e.jobTitle?.trim().toLowerCase() === job.jobTitle.trim().toLowerCase()
-                      );
-                      const dept = departments.find((d) => d.departmentId === job.departmentId);
-
-                      return (
-                        <tr key={job.jobId} className="hover:bg-slate-50/60 transition-colors">
-                          <td className="px-6 py-3.5 font-bold text-slate-900">
-                            <div className="flex items-center gap-2">
-                              <Briefcase weight="duotone" className="w-4 h-4 text-blue-600 shrink-0" />
-                              <span>{job.jobTitle}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-3.5 font-medium text-slate-700">
-                            <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-[11px] font-mono">
-                              {job.departmentName || dept?.departmentName || '—'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-3.5 font-mono text-slate-600 tabular-nums">
-                            {job.minSalary && job.maxSalary
-                              ? `$${job.minSalary.toLocaleString()} – $${job.maxSalary.toLocaleString()}`
-                              : t('standardBand')}
-                          </td>
-                          <td className="px-6 py-3.5 font-mono font-semibold text-slate-800 tabular-nums">
-                            {assignedStaff.length}{' '}
-                            {assignedStaff.length === 1 ? t('employeeSingular') : t('employeePlural')}
-                          </td>
-                          {isManager && (
-                            <td className="px-6 py-3.5 text-right">
+                ) : (
+                  filteredJobs.map((job) => {
+                    const assignedStaff = employees.filter(
+                      (e) =>
+                        (job.departmentId === undefined || e.departmentId === job.departmentId) &&
+                        e.jobTitle?.trim().toLowerCase() === job.jobTitle.trim().toLowerCase()
+                    );
+                    const dept = departments.find((d) => d.departmentId === job.departmentId);
+                    return (
+                      <tr key={job.jobId}>
+                        <td className="py-3.5 px-5 font-semibold text-slate-900">{job.jobTitle}</td>
+                        <td className="py-3.5 px-5 text-slate-600">{job.departmentName || dept?.departmentName || '—'}</td>
+                        <td className="py-3.5 px-5 text-right">
+                          {assignedStaff.length}{' '}
+                          {assignedStaff.length === 1 ? t('employeeSingular') : t('employeePlural')}
+                        </td>
+                        {isManager && (
+                          <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                            {canEditJobs && (
                               <button
                                 type="button"
-                                onClick={() => setConfirmDeleteJob(job)}
-                                aria-label={`${t('deleteJobTooltip')} ${job.jobTitle}`}
-                                title={t('deleteJobTooltip')}
-                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none cursor-pointer"
+                                onClick={() => openEditJob(job)}
+                                aria-label={t('jbEditAria', { name: job.jobTitle })}
+                                title={t('jbEditTitle')}
+                                className={`${iconBtn} hover:text-brand-700 hover:bg-brand-50`}
                               >
-                                <Trash weight="bold" className="w-3.5 h-3.5" />
+                                <PencilSimple weight="bold" className="w-4 h-4" />
                               </button>
-                            </td>
-                          )}
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteJob(job)}
+                              aria-label={`${t('deleteJobTooltip')} ${job.jobTitle}`}
+                              title={t('deleteJobTooltip')}
+                              className={`${iconBtn} hover:text-rose-700 hover:bg-rose-50`}
+                            >
+                              <Trash weight="bold" className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -647,31 +592,19 @@ export const DepartmentsPage: React.FC = () => {
                 className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-3">
-                  {emp.avatarUrl ? (
-                    <img
-                      src={emp.avatarUrl}
-                      alt={`${emp.firstName} ${emp.lastName}`}
-                      width={36}
-                      height={36}
-                      className="w-9 h-9 rounded-full object-cover shrink-0"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs shrink-0">
-                      {`${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`}
-                    </div>
-                  )}
+                  <InitialsAvatar name={`${emp.firstName} ${emp.lastName}`} employeeId={emp.employeeId} />
                   <div>
                     <h4 className="text-xs font-bold text-slate-900 leading-snug">
                       {emp.firstName} {emp.lastName}
                     </h4>
-                    <p className="text-[11px] text-slate-500 font-medium">{emp.jobTitle}</p>
+                    <p className="text-xs text-slate-500 font-medium">{emp.jobTitle}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
                     {tStatus(emp.status)}
                   </span>
-                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">#{emp.employeeId}</div>
+                  <div className="text-xs text-slate-400 font-mono mt-0.5">#{emp.employeeId}</div>
                 </div>
               </div>
             ))
@@ -700,7 +633,7 @@ export const DepartmentsPage: React.FC = () => {
           )}
 
           <div>
-            <label htmlFor="deptNameInput" className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="deptNameInput" className="block text-sm font-semibold text-slate-800 mb-1.5">
               {t('deptNameLabel')}
             </label>
             <input
@@ -710,12 +643,12 @@ export const DepartmentsPage: React.FC = () => {
               onChange={(e) => setFormName(e.target.value)}
               placeholder={t('deptNamePlaceholder')}
               required
-              className="w-full px-3 py-2 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500"
+              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500"
             />
           </div>
 
           <div>
-            <label htmlFor="deptDescInput" className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="deptDescInput" className="block text-sm font-semibold text-slate-800 mb-1.5">
               {t('descriptionLabel')}
             </label>
             <textarea
@@ -724,41 +657,8 @@ export const DepartmentsPage: React.FC = () => {
               onChange={(e) => setFormDesc(e.target.value)}
               placeholder={t('deptDescPlaceholder')}
               rows={2}
-              className="w-full px-3 py-2 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500"
+              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500"
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="deptBudgetInput" className="block text-xs font-semibold text-slate-700 mb-1">
-                {t('monthlyBudgetUsdLabel')}
-              </label>
-              <input
-                id="deptBudgetInput"
-                type="number"
-                value={formBudget}
-                onChange={(e) => setFormBudget(e.target.value)}
-                placeholder="40000"
-                required
-                className="w-full px-3 py-2 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {t('deptLeadLabel')}
-              </label>
-              <BehavioralHistorySelect
-                placeholder={t('chooseLeadPlaceholder')}
-                options={employees.map((emp) => ({
-                  value: emp.employeeId,
-                  label: `${emp.firstName} ${emp.lastName}`,
-                }))}
-                value={formLeadId}
-                onChange={(val) => setFormLeadId(Number(val))}
-                storageKey="hrms_dept_lead_history"
-              />
-            </div>
           </div>
 
           <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
@@ -772,7 +672,7 @@ export const DepartmentsPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 min-h-[38px] px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold active:scale-[0.98] transition-[transform,background-color] disabled:opacity-60 cursor-pointer"
+              className="inline-flex items-center gap-2 min-h-[38px] px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold active:scale-[0.98] transition-[transform,background-color] disabled:opacity-60 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -790,9 +690,12 @@ export const DepartmentsPage: React.FC = () => {
       {/* Modal: Add Job Title */}
       <Modal
         isOpen={isJobModalOpen}
-        onClose={() => setIsJobModalOpen(false)}
-        title={t('addJobModalTitle')}
-        subtitle={t('addJobModalSub')}
+        onClose={() => {
+          setIsJobModalOpen(false);
+          setEditingJob(null);
+        }}
+        title={editingJob ? t('jbEditTitle') : t('addJobModalTitle')}
+        subtitle={editingJob ? t('jbEditSub') : t('addJobModalSub')}
         maxWidth="md"
       >
         <form onSubmit={handleSaveJob} className="space-y-3.5">
@@ -808,7 +711,7 @@ export const DepartmentsPage: React.FC = () => {
           )}
 
           <div>
-            <label htmlFor="jobTitleInput" className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="jobTitleInput" className="block text-sm font-semibold text-slate-800 mb-1.5">
               {t('jobTitleLabel')}
             </label>
             <input
@@ -818,12 +721,12 @@ export const DepartmentsPage: React.FC = () => {
               onChange={(e) => setJobTitleInput(e.target.value)}
               placeholder={t('jobTitlePlaceholder')}
               required
-              className="w-full px-3 py-2 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-800 mb-1.5">
               {t('assignedDeptLabel')}
             </label>
             <BehavioralHistorySelect
@@ -838,37 +741,9 @@ export const DepartmentsPage: React.FC = () => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="jobMinSalary" className="block text-xs font-semibold text-slate-700 mb-1">
-                {t('minBaseSalaryLabel')}
-              </label>
-              <input
-                id="jobMinSalary"
-                type="number"
-                value={jobMinSalaryInput}
-                onChange={(e) => setJobMinSalaryInput(e.target.value)}
-                placeholder="1500"
-                className="w-full px-3 py-2 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
-              />
-            </div>
-            <div>
-              <label htmlFor="jobMaxSalary" className="block text-xs font-semibold text-slate-700 mb-1">
-                {t('maxBaseSalaryLabel')}
-              </label>
-              <input
-                id="jobMaxSalary"
-                type="number"
-                value={jobMaxSalaryInput}
-                onChange={(e) => setJobMaxSalaryInput(e.target.value)}
-                placeholder="3000"
-                className="w-full px-3 py-2 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
-              />
-            </div>
-          </div>
 
           <div>
-            <label htmlFor="jobDescInput" className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="jobDescInput" className="block text-sm font-semibold text-slate-800 mb-1.5">
               {t('descOptionalLabel')}
             </label>
             <textarea
@@ -877,7 +752,7 @@ export const DepartmentsPage: React.FC = () => {
               onChange={(e) => setJobDescInput(e.target.value)}
               placeholder={t('jobDescPlaceholder')}
               rows={2}
-              className="w-full px-3 py-2 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
             />
           </div>
 
@@ -892,7 +767,7 @@ export const DepartmentsPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 min-h-[38px] px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold active:scale-[0.98] transition-[transform,background-color] disabled:opacity-60 cursor-pointer"
+              className="inline-flex items-center gap-2 min-h-[38px] px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold active:scale-[0.98] transition-[transform,background-color] disabled:opacity-60 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -900,7 +775,7 @@ export const DepartmentsPage: React.FC = () => {
                   <span>{t('saving')}</span>
                 </>
               ) : (
-                <span>{t('saveJobTitle')}</span>
+                <span>{editingJob ? t('acSave') : t('saveJobTitle')}</span>
               )}
             </button>
           </div>

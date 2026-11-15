@@ -21,6 +21,18 @@ import java.time.LocalDate;
 @Table(name = "tbl_employee")
 public class Employee {
 
+    @Column(name = "employee_code", nullable = false, unique = true, length = 20)
+    private String employeeCode;
+
+    @Column(name = "hire_date", nullable = false)
+    private LocalDate hireDate;
+
+    @jakarta.persistence.PrePersist
+    void initializeEmployment() {
+        if (employeeCode == null) employeeCode = "EMP-" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        if (hireDate == null) hireDate = LocalDate.now(java.time.ZoneId.of("Asia/Phnom_Penh"));
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "employee_id")
@@ -48,6 +60,22 @@ public class Employee {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
     private Department department;
+
+    // Contact details the employee maintains themselves (PATCH /api/employees/me/contact).
+    @Column(name = "phone_number")
+    private String phoneNumber;
+
+    @Column(name = "address")
+    private String address;
+
+    @Column(name = "emergency_contact_name")
+    private String emergencyContactName;
+
+    @Column(name = "emergency_contact_phone")
+    private String emergencyContactPhone;
+
+    @Column(name = "emergency_contact_relation")
+    private String emergencyContactRelation;
 
     /** Must belong to the employee's department (checked in EmployeeService). */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -139,6 +167,30 @@ public class Employee {
         this.email = email;
         this.contractEndDate = contractEndDate;
         this.department = department;
+    }
+
+    public String getPhoneNumber() { return phoneNumber; }
+
+    public String getAddress() { return address; }
+
+    public String getEmergencyContactName() { return emergencyContactName; }
+
+    public String getEmergencyContactPhone() { return emergencyContactPhone; }
+
+    public String getEmergencyContactRelation() { return emergencyContactRelation; }
+
+    /** Self-service contact details; blank values clear the field. */
+    public void updateContact(String phoneNumber, String address, String emergencyContactName,
+                              String emergencyContactPhone, String emergencyContactRelation) {
+        this.phoneNumber = blankToNull(phoneNumber);
+        this.address = blankToNull(address);
+        this.emergencyContactName = blankToNull(emergencyContactName);
+        this.emergencyContactPhone = blankToNull(emergencyContactPhone);
+        this.emergencyContactRelation = blankToNull(emergencyContactRelation);
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     public void changeStatus(EmployeeStatus newStatus) {

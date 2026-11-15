@@ -8,6 +8,8 @@ export type Permission =
   | 'EMPLOYEE_CREATE'
   | 'EMPLOYEE_EDIT'
   | 'EMPLOYEE_DELETE'
+  | 'EMPLOYEE_JOB_HISTORY'
+  | 'JOB_TITLE_EDIT'
   // Attendance & Punch
   | 'ATTENDANCE_PUNCH'
   | 'ATTENDANCE_VIEW_OWN'
@@ -36,6 +38,8 @@ export type Permission =
  */
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ROLE_ADMIN: [
+    'EMPLOYEE_JOB_HISTORY',
+    'JOB_TITLE_EDIT',
     'EMPLOYEE_VIEW_DIRECTORY',
     'EMPLOYEE_VIEW_SALARY',
     'EMPLOYEE_CREATE',
@@ -60,6 +64,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
 
   ROLE_HR: [
+    'EMPLOYEE_JOB_HISTORY',
+    'JOB_TITLE_EDIT',
     'EMPLOYEE_VIEW_DIRECTORY',
     'EMPLOYEE_VIEW_SALARY',
     'EMPLOYEE_CREATE',
@@ -121,6 +127,8 @@ export const isRoleAllowedForTab = (role: UserRole, tab: NavTab): boolean => {
       return role === 'ROLE_ADMIN' || role === 'ROLE_HR';
     case 'reports':
       return hasPermission(role, 'REPORTS_VIEW_EXECUTIVE');
+    case 'accounts':
+      return role === 'ROLE_ADMIN';
     default:
       return true;
   }
@@ -140,6 +148,7 @@ export const getAllowedTabs = (role: UserRole): NavTab[] => {
     'payroll',
     'reports',
     'profile',
+    'accounts',
   ];
   return allTabs.filter((tab) => isRoleAllowedForTab(role, tab));
 };
@@ -170,16 +179,16 @@ export const getRoleBadge = (role: UserRole): RoleBadgeConfig => {
         label: 'HR Operations Manager',
         shortTag: 'HR MANAGER',
         description: 'People Operations & Roster Oversight',
-        badgeClass: 'bg-blue-50 text-blue-700 border-blue-200/80',
-        dotClass: 'bg-blue-500',
+        badgeClass: 'bg-brand-50 text-brand-700 border-brand-200/80',
+        dotClass: 'bg-brand-500',
       };
     case 'ROLE_EMPLOYEE':
       return {
         label: 'Staff Member',
         shortTag: 'EMPLOYEE',
         description: 'Employee Self-Service Portal',
-        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
-        dotClass: 'bg-emerald-500',
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+        dotClass: 'bg-slate-500',
       };
   }
 };

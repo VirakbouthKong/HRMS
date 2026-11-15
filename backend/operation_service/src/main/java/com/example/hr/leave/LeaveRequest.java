@@ -21,6 +21,30 @@ import java.time.LocalDate;
 @Table(name = "tbl_leave")
 public class LeaveRequest {
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "leave_type_id", nullable = false)
+    private LeaveType typeDefinition;
+
+    @Column(name = "day_portion", nullable = false)
+    private java.math.BigDecimal dayPortion = java.math.BigDecimal.ONE;
+    @Column(name = "half_day", nullable = false)
+    private boolean halfDay;
+    @Column(name = "submitted_on", nullable = false)
+    private LocalDate submittedOn = LocalDate.now(java.time.ZoneId.of("Asia/Phnom_Penh"));
+    @Column(name = "decided_on")
+    private LocalDate decidedOn;
+    @Column(name = "decided_by_username")
+    private String decidedByUsername;
+    public String getDecidedByUsername() { return decidedByUsername; }
+    public void setWorkingDays(long days) { dayPortion = java.math.BigDecimal.valueOf(days); }
+    private void recordReviewer() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null) decidedByUsername = auth.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt ? jwt.getClaimAsString("username") : auth.getName();
+    }
+
+    public void setTypeDefinition(LeaveType type) { this.typeDefinition = type; this.leaveType = type.getCode(); }
+    public boolean isPaid() { return typeDefinition != null && typeDefinition.isPaid(); }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "leave_id")
@@ -100,12 +124,16 @@ public class LeaveRequest {
     public void approve(Employee approver) {
         requirePending();
         this.status = LeaveStatus.APPROVED;
+        recordReviewer();
+        this.decidedOn = LocalDate.now(java.time.ZoneId.of("Asia/Phnom_Penh"));
         this.approvedBy = approver;
     }
 
     public void reject(Employee approver) {
         requirePending();
         this.status = LeaveStatus.REJECTED;
+        recordReviewer();
+        this.decidedOn = LocalDate.now(java.time.ZoneId.of("Asia/Phnom_Penh"));
         this.approvedBy = approver;
     }
 

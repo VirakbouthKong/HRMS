@@ -17,10 +17,12 @@ public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
     private final EmployeeRepository employeeRepository;
+    private final com.example.hr.job.JobRepository jobRepository;
 
-    public DepartmentService(DepartmentRepository departmentRepository, EmployeeRepository employeeRepository) {
+    public DepartmentService(DepartmentRepository departmentRepository, EmployeeRepository employeeRepository, com.example.hr.job.JobRepository jobRepository) {
         this.departmentRepository = departmentRepository;
         this.employeeRepository = employeeRepository;
+        this.jobRepository = jobRepository;
     }
 
     public DepartmentResponse createDepartment(DepartmentRequest request) {
@@ -55,6 +57,10 @@ public class DepartmentService {
                 .orElseThrow(() -> new DepartmentNotFoundException(departmentId));
         if (employeeRepository.existsByDepartmentDepartmentId(departmentId)) {
             throw new DepartmentHasEmployeesException(departmentId);
+        }
+        if (!jobRepository.findByDepartmentDepartmentId(departmentId).isEmpty()) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                    "Department still has jobs. Remove or move them first.");
         }
         departmentRepository.delete(department);
     }

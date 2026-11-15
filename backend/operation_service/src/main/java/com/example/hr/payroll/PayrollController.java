@@ -64,6 +64,12 @@ public class PayrollController {
         return ResponseEntity.ok(payrollService.getMyPayrolls(currentEmployeeId()));
     }
 
+    @PatchMapping("/{payrollId}/paid")
+    @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER')")
+    public PayrollRecordResponse markPaid(@PathVariable Integer payrollId) {
+        return payrollService.markPaid(payrollId);
+    }
+
     /** From the token's employeeId claim; never the account id (see CurrentEmployee). */
 
     private static Integer currentEmployeeId() {

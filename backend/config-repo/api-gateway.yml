@@ -45,7 +45,7 @@ spring:
             - id: operation-service
               uri: ${hrms.services.operation}
               predicates:
-                - Path=/api/employees/**,/api/departments/**,/api/jobs/**,/api/attendance/**,/api/leaves/**,/api/payroll/**
+                - Path=/api/employees/**,/api/departments/**,/api/jobs/**,/api/attendance/**,/api/attendance-requests/**,/api/leaves/**,/api/payroll/**
 
             - id: cron-service
               uri: ${hrms.services.cron}

@@ -21,6 +21,12 @@ import java.util.List;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    @ExceptionHandler({org.springframework.dao.DataIntegrityViolationException.class, org.springframework.dao.OptimisticLockingFailureException.class})
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ApiError handleConflict(RuntimeException exception) {
+        return new ApiError("This change conflicts with existing data or another update. Refresh and try again.", List.of());
+    }
+
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)

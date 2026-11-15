@@ -14,6 +14,11 @@ public record EmployeeResponse(
         EmployeeStatus status,
         Integer departmentId,
         String departmentName,
-        String jobTitle
+        String jobTitle,
+        String phoneNumber,
+        String address,
+        String emergencyContactName,
+        String emergencyContactPhone,
+        String emergencyContactRelation
 ) {
 }

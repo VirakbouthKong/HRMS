@@ -11,6 +11,9 @@ import { DepartmentsPage } from './pages/DepartmentsPage';
 import { AutomationsPage } from './pages/AutomationsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { LoginPage } from './pages/LoginPage';
+import { AccountsPage } from './pages/AccountsPage';
+import { isRoleAllowedForTab } from './utils/rbac';
+import { loadAppConfig, useAppConfig } from './lib/appConfig';
 import { LanguageSwitcher } from './components/ui/LanguageSwitcher';
 import { useHrmsStore, NavTab } from './store/useHrmsStore';
 import { useI18n, TranslationKey } from './i18n/useI18n';
@@ -21,6 +24,7 @@ import {
   CircleNotch,
   CaretDown,
   CaretUp,
+  Leaf,
 } from '@phosphor-icons/react';
 
 export const App: React.FC = () => {
@@ -36,6 +40,12 @@ export const App: React.FC = () => {
     syncWithGateway,
   } = useHrmsStore();
   const { t } = useI18n();
+  const { features } = useAppConfig();
+
+  // Frontend settings from the gateway (GET /api/public/config); no token needed.
+  useEffect(() => {
+    loadAppConfig();
+  }, []);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -75,98 +85,91 @@ export const App: React.FC = () => {
     return <LoginPage />;
   }
 
-  // Streamlined Base Web Disconnection Modal (100% Pure Live API Gateway Mode)
+  // Gateway unreachable: Evergreen offline screen with retry
   if (!isGatewayConnected && gatewayError) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center p-6 bg-slate-950 text-slate-100 select-none relative overflow-hidden">
-        {/* Subtle grid backdrop */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-30 pointer-events-none"
-        />
+      <div className="hrms-login min-h-screen w-full flex flex-col bg-[#F5F6F4]">
+        {/* Top bar: brand + language (same as the sign-in page) */}
+        <header className="flex flex-wrap items-center justify-between gap-3 px-5 sm:px-8 py-5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center">
+              <Leaf weight="bold" className="w-5 h-5" />
+            </div>
+            <span className="font-heading text-[17px] font-bold tracking-tight text-slate-900">{t('brandName')}</span>
+          </div>
+          <LanguageSwitcher variant="login" />
+        </header>
 
-        {/* Top-Right Flag Switcher */}
-        <div className="absolute top-6 right-6 z-20">
-          <LanguageSwitcher variant="dark" />
-        </div>
-
-        <div className="relative w-full max-w-md z-10 animate-fadeIn">
-          <div className="rounded-3xl border border-slate-800 bg-slate-900/95 backdrop-blur-xl p-6 sm:p-8 shadow-2xl text-center space-y-6">
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shadow-inner">
+        <main className="flex-1 flex items-center justify-center px-4 pb-14">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-[22px] p-7 sm:p-8 text-center space-y-6 animate-fadeIn">
+            <div className="mx-auto w-14 h-14 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center">
               <WifiSlash weight="bold" className="w-7 h-7" />
             </div>
 
-            <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-rose-500/15 text-rose-400 border border-rose-500/25 mb-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
-                <span>{t('serviceOffline')}</span>
-              </div>
-              <h1 className="text-xl font-bold text-white tracking-tight">
-                {t('connectionLost')}
-              </h1>
-              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                {t('connectionLostDesc')}
-              </p>
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-800">
+                <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-current" />
+                {t('serviceOffline')}
+              </span>
+              <h1 className="text-2xl font-semibold text-slate-900 tracking-tight">{t('connectionLost')}</h1>
+              <p className="text-sm text-slate-500 max-w-xs mx-auto leading-relaxed">{t('connectionLostDesc')}</p>
             </div>
 
-            {/* Progressive Disclosure for Technical Details */}
-            <div className="pt-1 text-left">
+            {/* Technical details on demand */}
+            <div className="text-left">
               <button
                 type="button"
                 onClick={() => setShowTechnicalDetails((prev) => !prev)}
                 aria-expanded={showTechnicalDetails}
-                className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-slate-300 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded-md px-1 py-0.5 cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-600 hover:text-slate-900 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none rounded-md px-1 py-0.5 cursor-pointer"
               >
-                <span>{t('diagnostics')}</span>
+                {t('diagnostics')}
                 {showTechnicalDetails ? (
                   <CaretUp weight="bold" className="w-3 h-3" />
                 ) : (
                   <CaretDown weight="bold" className="w-3 h-3" />
                 )}
               </button>
-
               {showTechnicalDetails && (
-                <div className="mt-2.5 p-3 rounded-xl bg-black/50 border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1 animate-fadeIn">
-                  <div className="text-rose-400 break-all">{gatewayError}</div>
-                  <div className="text-[10px] text-slate-500">
+                <div className="mt-2.5 p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono text-slate-600 space-y-1 animate-fadeIn">
+                  <div className="text-rose-800 break-all">{gatewayError}</div>
+                  <div>
                     {t('accountLabel')}: {currentUser.userName}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Action Bar */}
-            <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={logout}
-                className="flex-1 inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-slate-800/80 hover:bg-slate-800 active:scale-[0.96] text-slate-300 hover:text-white text-xs font-semibold border border-slate-700/60 transition-[transform,background-color,color] duration-150 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                className="flex-1 inline-flex items-center justify-center gap-2 h-11 px-4 rounded-full border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
               >
                 <SignOut weight="bold" className="w-4 h-4" />
-                <span>{t('signOut')}</span>
+                {t('signOut')}
               </button>
-
               <button
                 type="button"
                 onClick={() => syncWithGateway()}
                 disabled={isLoading}
-                className="flex-1 inline-flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-[0.96] text-white text-xs font-bold transition-[transform,background-color] duration-150 shadow-lg shadow-rose-950/40 disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:outline-none cursor-pointer"
+                className="flex-1 inline-flex items-center justify-center gap-2 h-11 px-4 rounded-full bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none cursor-pointer"
               >
                 {isLoading ? (
                   <>
                     <CircleNotch weight="bold" className="w-4 h-4 animate-spin" />
-                    <span>{t('connecting')}</span>
+                    {t('connecting')}
                   </>
                 ) : (
                   <>
                     <ArrowsClockwise weight="bold" className="w-4 h-4" />
-                    <span>{t('retry')}</span>
+                    {t('retry')}
                   </>
                 )}
               </button>
             </div>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -182,6 +185,7 @@ export const App: React.FC = () => {
     payroll: { title: 'secTitlePayroll', subtitle: 'secSubPayroll' },
     reports: { title: 'secTitleReports', subtitle: 'secSubReports' },
     profile: { title: 'secTitleProfile', subtitle: 'secSubProfile' },
+    accounts: { title: 'secTitleAccounts', subtitle: 'secSubAccounts' },
   };
   const sectionMeta = SECTION_META[activeTab] ?? {
     title: 'secTitleDashboard' as TranslationKey,
@@ -204,18 +208,20 @@ export const App: React.FC = () => {
       case 'leaves':
         return <LeavesPage />;
       case 'payroll':
-        return <PayrollPage />;
+        return features.payroll ? <PayrollPage /> : <DashboardPage />;
       case 'reports':
-        return <ReportsPage />;
+        return features.reports ? <ReportsPage /> : <DashboardPage />;
       case 'profile':
         return <ProfilePage />;
+      case 'accounts':
+        return isRoleAllowedForTab(currentUser.role, 'accounts') ? <AccountsPage /> : <DashboardPage />;
       default:
         return <DashboardPage />;
     }
   };
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[#eaf1f7]">
+    <div className="hrms-workspace flex h-screen w-full overflow-hidden bg-[#F5F6F4]">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[200] focus:px-3 focus:py-2 focus:rounded-lg focus:bg-slate-900 focus:text-white focus:text-xs focus:font-semibold focus:shadow-lg"
@@ -255,16 +261,19 @@ export const App: React.FC = () => {
           onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
         />
 
-        <main id="main-content" className="flex-1 px-4 sm:px-6 lg:px-8 pt-2 min-w-0">
+        <main id="main-content" tabIndex={-1} className="flex-1 w-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-10 pt-7 min-w-0">
           <div key={activeTab} className="animate-pageEnter">
-            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-0.5 pt-2 pb-3">
-              <h1 className="text-base sm:text-lg font-bold tracking-tight text-slate-900">
-                {t(sectionMeta.title)}
-              </h1>
-              <p className="text-xs text-slate-500">
-                {t(sectionMeta.subtitle)}
-              </p>
-            </div>
+            {/* The dashboard renders its own greeting header */}
+            {activeTab !== 'dashboard' && (
+              <div className="flex flex-col gap-2 pb-7">
+                <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight text-slate-900">
+                  {t(sectionMeta.title)}
+                </h1>
+                <p className="text-sm text-slate-500 leading-relaxed max-w-2xl">
+                  {t(sectionMeta.subtitle)}
+                </p>
+              </div>
+            )}
             {renderActivePage()}
           </div>
         </main>

@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   WarningCircle,
   CircleNotch,
+  Check,
 } from '@phosphor-icons/react';
 import { useHrmsStore } from '../store/useHrmsStore';
 import { PayrollRecord } from '../types';
@@ -21,6 +22,9 @@ import { hasPermission } from '../utils/rbac';
 import { useI18n } from '../i18n/useI18n';
 import { getMonthLabel } from '../i18n/translations';
 import { payrollApi } from '../api';
+import { MetricCard } from '../components/dashboard/MetricCard';
+import { DashboardCard, InitialsAvatar, StatusChip } from '../components/dashboard/DashboardCard';
+import { FilterTabs } from '../components/ui/filter-tabs';
 
 export const PayrollPage: React.FC = () => {
   const {
@@ -49,6 +53,8 @@ export const PayrollPage: React.FC = () => {
   const [salaryModalError, setSalaryModalError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [payTab, setPayTab] = useState<'ALL' | PayrollRecord['status']>('ALL');
+  const [busyRecordId, setBusyRecordId] = useState<number | null>(null);
 
   const canViewAll = hasPermission(currentUser.role, 'PAYROLL_VIEW_ALL');
   const canMarkPaid = hasPermission(currentUser.role, 'PAYROLL_MARK_PAID');
@@ -70,8 +76,6 @@ export const PayrollPage: React.FC = () => {
     ? payroll
     : payroll.filter((p) => p.employeeId === myEmployeeId);
 
-  const totalPayrollExpense = payroll.reduce((sum, p) => sum + p.netSalary, 0);
-  const totalTax = payroll.reduce((sum, p) => sum + p.taxDeductions, 0);
 
   const myLatestSlip = displayedPayroll[0];
   const myNetSalary = myLatestSlip?.netSalary || 0;
@@ -160,273 +164,270 @@ export const PayrollPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // --- Evergreen run overview (derived from the payslips loaded for the selected period) ---
+  const money = (n: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(n || 0);
+  const [selYear, selMonthNum] = selectedMonth.split('-').map(Number);
+  const periodLabel = getMonthLabel((selMonthNum || 1) - 1, selYear || currentYear, language);
+
+  const countBy = (status: PayrollRecord['status']) => displayedPayroll.filter((p) => p.status === status).length;
+  const pendingCount = countBy('PENDING');
+  const processedCount = countBy('PROCESSED');
+  const paidCount = countBy('PAID');
+  const generated = displayedPayroll.length > 0;
+  const steps = [
+    { label: t('prStepGenerated'), done: generated },
+    { label: t('prStepProcessed'), done: generated && pendingCount === 0 },
+    { label: t('prStepPaid'), done: generated && paidCount === displayedPayroll.length },
+  ];
+  const currentStep = steps.findIndex((s) => !s.done);
+  const runChip = !generated ? (
+    <StatusChip tone="neutral">{t('prStatusNotStarted')}</StatusChip>
+  ) : currentStep === -1 ? (
+    <StatusChip tone="ok">{t('prStatusDone')}</StatusChip>
+  ) : (
+    <StatusChip tone="warn">{t('prStatusInProgress')}</StatusChip>
+  );
+  const sum = (pick: (p: PayrollRecord) => number) => displayedPayroll.reduce((acc, p) => acc + (pick(p) || 0), 0);
+  const totals = [
+    { label: t('prTotalBase'), value: money(sum((p) => p.baseSalary)) },
+    { label: t('prTotalAllowances'), value: `+${money(sum((p) => p.allowances))}` },
+    { label: t('prTotalLate'), value: `−${money(sum((p) => p.lateDeductions))}` },
+    { label: t('prTotalTax'), value: `−${money(sum((p) => p.taxDeductions))}` },
+    { label: t('prTotalNet'), value: money(sum((p) => p.netSalary)), strong: true },
+  ];
+
+  const tabRows = payTab === 'ALL' ? displayedPayroll : displayedPayroll.filter((p) => p.status === payTab);
+  const statusChip = (status: PayrollRecord['status']) => (
+    <StatusChip tone={status === 'PAID' ? 'ok' : status === 'PROCESSED' ? 'info' : 'warn'}>{tStatus(status)}</StatusChip>
+  );
+
+  const handleMarkPaid = async (p: PayrollRecord) => {
+    setErrorMessage(null);
+    setBusyRecordId(p.recordId);
+    const result = await markPayrollPaid(p.recordId);
+    setBusyRecordId(null);
+    if (!result.success) setErrorMessage(result.error || 'Failed to mark payroll paid.');
+  };
+
+  const secondaryBtn =
+    'inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 text-sm font-semibold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none';
+  const smallBtn =
+    'inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:outline-none';
+
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. Summary Cards & Generator Action */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {canViewAll ? (
-          <>
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-              <div className="flex items-start justify-between">
-                <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-                  ${totalPayrollExpense.toLocaleString()}
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <CurrencyDollar weight="fill" className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-                  {t('totalMonthlyPayout')}
-                </h3>
-                <p className="text-[11px] text-emerald-600 mt-0.5 leading-tight font-medium">
-                  {t('calculatedNetComp')}
-                </p>
-              </div>
-            </div>
+      {canViewAll ? (
+        <>
+          {/* 1. Toolbar: period, pay rules, run */}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <BehavioralHistorySelect
+              label={t('prPeriodLabel')}
+              options={monthOptions}
+              value={selectedMonth}
+              onChange={handlePeriodChange}
+              storageKey="hrms_payroll_period_history"
+              selectWidth="170px"
+              placeholder={t('colPeriod')}
+            />
+            <button type="button" onClick={handleOpenSalarySetup} className={secondaryBtn}>
+              <GearSix weight="bold" className="w-4 h-4" />
+              {t('prPayRules')}
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+            >
+              {isGenerating ? (
+                <CircleNotch weight="bold" className="w-4 h-4 animate-spin" />
+              ) : (
+                <Play weight="fill" className="w-4 h-4" />
+              )}
+              {t('runPayroll')}
+            </button>
+          </div>
 
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-              <div className="flex items-start justify-between">
-                <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-                  ${totalTax.toLocaleString()}
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <Receipt weight="fill" className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-                  {t('withholdingTaxTotal')}
-                </h3>
-                <p className="text-[11px] text-blue-600 mt-0.5 leading-tight font-medium">
-                  {t('taxComplianceWithholding')}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-              <div className="flex items-start justify-between">
-                <span className="text-xs font-bold text-slate-800 tracking-tight">
-                  {t('batchPayrollProcessing')}
-                </span>
-                <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <GearSix weight="fill" className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 mt-3">
-                <BehavioralHistorySelect
-                  label={t('colPeriod')}
-                  options={monthOptions}
-                  value={selectedMonth}
-                  onChange={handlePeriodChange}
-                  storageKey="hrms_payroll_period_history"
-                  selectWidth="140px"
-                  placeholder={t('colPeriod')}
-                />
-                <button
-                  type="button"
-                  onClick={handleGenerate}
-                  disabled={isGenerating}
-                  aria-label={t('runPayroll')}
-                  className="flex-1 flex items-center justify-center gap-1.5 min-h-[38px] px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.97] text-white text-xs font-bold shadow-sm transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none disabled:opacity-60 cursor-pointer whitespace-nowrap"
+          {/* 2. Run overview */}
+          <DashboardCard
+            title={t('prRunTitle', { period: periodLabel })}
+            subtitle={generated ? t('prRunSub', { count: displayedPayroll.length }) : t('prNotGeneratedHint')}
+            action={runChip}
+          >
+            <ol className="flex flex-wrap gap-2">
+              {steps.map((step, i) => {
+                const isCurrent = i === currentStep;
+                return (
+                  <li
+                    key={step.label}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    className={`flex-[1_1_180px] flex items-center gap-2.5 px-3 py-2.5 rounded-lg ${
+                      isCurrent ? 'bg-brand-50' : 'bg-slate-50'
+                    }`}
+                  >
+                    {step.done ? (
+                      <span className="w-6 h-6 rounded-full bg-brand-600 text-white inline-flex items-center justify-center shrink-0">
+                        <Check weight="bold" className="w-3.5 h-3.5" />
+                      </span>
+                    ) : (
+                      <span
+                        className={`w-6 h-6 rounded-full inline-flex items-center justify-center shrink-0 text-xs font-bold ${
+                          isCurrent ? 'border-2 border-brand-600 text-brand-700' : 'border border-slate-300 text-slate-500'
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                    )}
+                    <span
+                      className={`text-sm ${step.done || isCurrent ? 'font-semibold text-slate-900' : 'font-medium text-slate-500'}`}
+                    >
+                      {step.label}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+            <dl className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+              {totals.map((item) => (
+                <div
+                  key={item.label}
+                  className={`px-3.5 py-3 rounded-lg ${item.strong ? 'bg-slate-50 border border-slate-200' : ''}`}
                 >
-                  {isGenerating ? (
-                    <CircleNotch weight="bold" className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Play weight="fill" className="w-3.5 h-3.5" />
-                  )}
-                  <span>{t('runPayroll')}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOpenSalarySetup}
-                  aria-label={t('compRulesTitle')}
-                  title={t('compRulesTitle')}
-                  className="min-w-[38px] min-h-[38px] p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center justify-center cursor-pointer"
-                >
-                  <GearSix weight="bold" className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-              <div className="flex items-start justify-between">
-                <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-                  ${myNetSalary.toLocaleString()}
+                  <dt className="text-[13px] text-slate-500">{item.label}</dt>
+                  <dd
+                    className={`mt-1 font-heading font-semibold text-slate-900 tabular-nums ${
+                      item.strong ? 'text-2xl' : 'text-xl'
+                    }`}
+                  >
+                    {item.value}
+                  </dd>
                 </div>
-                <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <Wallet weight="fill" className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-                  {t('myMonthlyNetPayout')}
-                </h3>
-                <p className="text-[11px] text-emerald-600 mt-0.5 leading-tight font-medium">
-                  {t('directDeposited')}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-              <div className="flex items-start justify-between">
-                <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-                  +${myAllowances.toLocaleString()}
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <Receipt weight="fill" className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-                  {t('monthlyAllowances')}
-                </h3>
-                <p className="text-[11px] text-blue-600 mt-0.5 leading-tight font-medium">
-                  {t('transportMealSubsidy')}
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-              <div className="flex items-start justify-between">
-                <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-                  -${myTax.toLocaleString()}
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <ShieldCheck weight="fill" className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-                  {t('taxAndDeductions')}
-                </h3>
-                <p className="text-[11px] text-purple-600 mt-0.5 leading-tight font-medium">
-                  {t('statutoryTaxWithheld')}
-                </p>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+              ))}
+            </dl>
+          </DashboardCard>
+        </>
+      ) : (
+        /* Employee: personal summary */
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <MetricCard
+            title={t('myMonthlyNetPayout')}
+            icon={Wallet}
+            accent="brand"
+            value={money(myNetSalary)}
+            subtitle={myLatestSlip ? t('prLatestSlip', { period: myLatestSlip.periodMonth }) : t('prNoSlipYet')}
+          />
+          <MetricCard
+            title={t('monthlyAllowances')}
+            icon={Receipt}
+            value={`+${money(myAllowances)}`}
+            subtitle={t('transportMealSubsidy')}
+          />
+          <MetricCard
+            title={t('taxAndDeductions')}
+            icon={ShieldCheck}
+            value={`−${money(myTax)}`}
+            subtitle={t('statutoryTaxWithheld')}
+          />
+        </div>
+      )}
 
       {errorMessage && (
         <div
           role="alert"
           aria-live="polite"
-          className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn"
+          className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-sm text-rose-800 flex items-center gap-2 animate-fadeIn"
         >
-          <WarningCircle weight="fill" className="w-4 h-4 text-rose-500 shrink-0" />
+          <WarningCircle weight="fill" className="w-4 h-4 text-rose-600 shrink-0" />
           <span className="font-medium">{errorMessage}</span>
         </div>
       )}
 
-      {/* 2. Payroll Records Table */}
-      <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CurrencyDollar weight="duotone" className="w-5 h-5 text-blue-600" />
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-                {canViewAll ? t('payrollRecordsTitle') : t('myCompensationTitle')}
-              </h2>
-              <p className="text-[10px] text-slate-400">
-                {canViewAll
-                  ? t('allSalaryDistributions')
-                  : t('personalPayrollAdvice', { name: currentUser.fullName })}
-              </p>
-            </div>
-          </div>
-          <span className="text-xs text-slate-400 font-mono">
-            {canViewAll ? t('periodPrefix', { period: selectedMonth }) : `#${myEmployeeId}`}
-          </span>
-        </div>
+      {/* 3. Payslips */}
+      <div className="flex flex-col gap-4">
+        <FilterTabs
+          label={t('prFilterLabel')}
+          value={payTab}
+          onChange={setPayTab}
+          tabs={[
+            { value: 'ALL', label: t('lvTabAll'), count: displayedPayroll.length },
+            { value: 'PENDING', label: t('prTabPending'), count: pendingCount },
+            { value: 'PROCESSED', label: t('prTabProcessed'), count: processedCount },
+            { value: 'PAID', label: t('prTabPaid'), count: paidCount },
+          ]}
+        />
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+          <table className="w-full min-w-[1000px] text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                <th className="py-3 px-6">{t('colEmployee')}</th>
-                <th className="py-3 px-6">{t('colDepartment')}</th>
-                <th className="py-3 px-6">{t('colPeriod')}</th>
-                <th className="py-3 px-6">{t('colBaseSalary')}</th>
-                <th className="py-3 px-6">{t('colAllowances')}</th>
-                <th className="py-3 px-6">{t('colDeductions')}</th>
-                <th className="py-3 px-6">{t('colNetSalary')}</th>
-                <th className="py-3 px-6">{t('colStatus')}</th>
-                <th className="py-3 px-6 text-right">{t('colActions')}</th>
+              <tr className="bg-slate-50 text-xs font-semibold text-slate-600 border-b border-slate-200">
+                <th scope="col" className="py-3 px-5">{t('colEmployee')}</th>
+                <th scope="col" className="py-3 px-5">{canViewAll ? t('colDepartment') : t('colPeriod')}</th>
+                <th scope="col" className="py-3 px-5 text-right">{t('colBaseSalary')}</th>
+                <th scope="col" className="py-3 px-5 text-right">{t('colAllowances')}</th>
+                <th scope="col" className="py-3 px-5 text-right">{t('prTotalLate')}</th>
+                <th scope="col" className="py-3 px-5 text-right">{t('prColTax')}</th>
+                <th scope="col" className="py-3 px-5 text-right">{t('prColNet')}</th>
+                <th scope="col" className="py-3 px-5">{t('colStatus')}</th>
+                <th scope="col" className="py-3 px-5 text-right">
+                  <span className="sr-only">{t('colActions')}</span>
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {displayedPayroll.length === 0 ? (
+            <tbody className="divide-y divide-slate-100 text-sm text-slate-700 tabular-nums">
+              {tabRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-10 px-6 text-center text-slate-400">
-                    {t('noPayrollRows')}
+                  <td colSpan={9} className="py-10 px-5 text-center text-slate-500">
+                    {displayedPayroll.length === 0 ? t('noPayrollRows') : t('prNoneInTab')}
                   </td>
                 </tr>
               ) : (
-                displayedPayroll.map((p) => (
-                  <tr key={p.recordId} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3.5 px-6 font-semibold text-slate-900">
-                      <div>{p.employeeName}</div>
-                      {p.jobTitle && (
-                        <div className="text-[11px] text-slate-400 font-normal">{p.jobTitle}</div>
+                tabRows.map((p) => (
+                  <tr key={p.recordId}>
+                    <td className="py-3.5 px-5">
+                      <div className="flex items-center gap-3">
+                        <InitialsAvatar name={p.employeeName} size="sm" employeeId={p.employeeId} />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-900">{p.employeeName}</div>
+                          {p.jobTitle && <div className="text-[13px] text-slate-500">{p.jobTitle}</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-5 text-slate-600">
+                      {canViewAll ? p.departmentName || '—' : p.periodMonth}
+                    </td>
+                    <td className="py-3.5 px-5 text-right">{money(p.baseSalary)}</td>
+                    <td className="py-3.5 px-5 text-right text-emerald-700">+{money(p.allowances)}</td>
+                    <td className="py-3.5 px-5 text-right">
+                      {p.lateDeductions ? (
+                        <span className="text-rose-700">−{money(p.lateDeductions)}</span>
+                      ) : (
+                        <span className="text-slate-500">—</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-6 font-medium text-slate-600">
-                      {p.departmentName || '—'}
-                    </td>
-                    <td className="py-3.5 px-6 font-mono text-[11px] text-slate-500 tabular-nums">
-                      {p.periodMonth}
-                    </td>
-                    <td className="py-3.5 px-6 font-mono font-medium tabular-nums">
-                      ${p.baseSalary.toLocaleString()}
-                    </td>
-                    <td className="py-3.5 px-6 font-mono text-emerald-600 tabular-nums">
-                      +${p.allowances}
-                    </td>
-                    <td className="py-3.5 px-6 font-mono text-rose-500 tabular-nums">
-                      -${(p.lateDeductions + p.taxDeductions).toLocaleString()}
-                    </td>
-                    <td className="py-3.5 px-6 font-mono font-bold text-slate-900 tabular-nums">
-                      ${p.netSalary.toLocaleString()}
-                    </td>
-                    <td className="py-3.5 px-6">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                          p.status === 'PAID'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                            : 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                        }`}
-                      >
-                        {p.status === 'PAID' ? (
-                          <CheckCircle weight="fill" className="w-3.5 h-3.5 text-emerald-600" />
-                        ) : (
-                          <Clock weight="fill" className="w-3.5 h-3.5 text-blue-600" />
-                        )}
-                        <span>{tStatus(p.status)}</span>
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                    <td className="py-3.5 px-5 text-right">−{money(p.taxDeductions)}</td>
+                    <td className="py-3.5 px-5 text-right font-bold text-slate-900">{money(p.netSalary)}</td>
+                    <td className="py-3.5 px-5">{statusChip(p.status)}</td>
+                    <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                      <div className="inline-flex gap-1.5">
                         <button
                           type="button"
                           onClick={() => setViewingPayslip(p)}
                           aria-label={`${t('payslipBtn')} ${p.employeeName}`}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                          className={`${smallBtn} border border-slate-200 bg-white text-slate-800 hover:bg-slate-50`}
                         >
-                          <FileText weight="bold" className="w-3.5 h-3.5 text-blue-600" />
-                          <span>{t('payslipBtn')}</span>
+                          <FileText weight="bold" className="w-3.5 h-3.5" />
+                          {t('payslipBtn')}
                         </button>
-
                         {canMarkPaid && p.status !== 'PAID' && (
                           <button
                             type="button"
-                            onClick={() => markPayrollPaid(p.recordId)}
+                            disabled={busyRecordId === p.recordId}
+                            onClick={() => handleMarkPaid(p)}
                             aria-label={`${t('markPaidBtn')} ${p.employeeName}`}
-                            className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:outline-none cursor-pointer"
+                            className={`${smallBtn} bg-brand-600 text-white hover:bg-brand-700`}
                           >
+                            {busyRecordId === p.recordId && <CircleNotch weight="bold" className="w-3.5 h-3.5 animate-spin" />}
                             {t('markPaidBtn')}
                           </button>
                         )}
@@ -450,17 +451,17 @@ export const PayrollPage: React.FC = () => {
       >
         {viewingPayslip && (
           <div className="space-y-4">
-            <div className="p-5 rounded-2xl bg-white border border-slate-200/80 shadow-sm space-y-4">
+            <div className="p-5 rounded-2xl bg-white border border-slate-200 space-y-4">
               <div className="flex justify-between items-start pb-3 border-b border-slate-100">
                 <div>
                   <h4 className="text-base font-bold text-slate-900">BigBoss Corp.</h4>
-                  <p className="text-[11px] text-slate-400">{t('payrollAdminService')}</p>
+                  <p className="text-xs text-slate-400">{t('payrollAdminService')}</p>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-bold font-mono text-blue-600">
+                  <span className="text-xs font-bold font-mono text-brand-600">
                     {viewingPayslip.periodMonth}
                   </span>
-                  <p className="text-[10px] text-slate-400">{t('confidentialPayAdvice')}</p>
+                  <p className="text-xs text-slate-400">{t('confidentialPayAdvice')}</p>
                 </div>
               </div>
 
@@ -483,7 +484,7 @@ export const PayrollPage: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-slate-400">{t('colStatus')}: </span>
-                  <span className="font-bold text-emerald-600">
+                  <span className="font-bold text-emerald-700">
                     {tStatus(viewingPayslip.status)}
                   </span>
                 </div>
@@ -491,7 +492,7 @@ export const PayrollPage: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 text-xs">
                 <div className="space-y-1.5">
-                  <h5 className="font-bold uppercase text-[10px] tracking-wider text-slate-400">
+                  <h5 className="font-semibold text-xs text-slate-400">
                     {t('earningsLabel')}
                   </h5>
                   <div className="flex justify-between text-slate-600">
@@ -502,14 +503,14 @@ export const PayrollPage: React.FC = () => {
                   </div>
                   <div className="flex justify-between text-slate-600">
                     <span>{t('allowancesColon')}</span>
-                    <span className="font-mono text-emerald-600 tabular-nums">
+                    <span className="font-mono text-emerald-700 tabular-nums">
                       +${viewingPayslip.allowances}
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <h5 className="font-bold uppercase text-[10px] tracking-wider text-slate-400">
+                  <h5 className="font-semibold text-xs text-slate-400">
                     {t('deductionsLabel')}
                   </h5>
                   <div className="flex justify-between text-slate-600">
@@ -527,21 +528,21 @@ export const PayrollPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-blue-50/80 border border-blue-100 flex items-center justify-between">
-                <span className="text-xs font-bold text-blue-900">{t('totalNetSalaryPaid')}</span>
-                <span className="text-lg font-extrabold font-mono text-blue-700 tabular-nums">
+              <div className="p-3 rounded-xl bg-brand-50/80 border border-brand-100 flex items-center justify-between">
+                <span className="text-xs font-bold text-brand-900">{t('totalNetSalaryPaid')}</span>
+                <span className="font-heading text-lg font-semibold font-mono text-brand-700 tabular-nums">
                   ${viewingPayslip.netSalary.toLocaleString()}
                 </span>
               </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">
-              <span className="text-[11px] text-slate-400">{t('generatedByBigBoss')}</span>
+              <span className="text-xs text-slate-400">{t('generatedByBigBoss')}</span>
               <button
                 type="button"
                 onClick={() => window.print()}
                 aria-label={t('printPayslip')}
-                className="flex items-center gap-1.5 min-h-[38px] px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                className="flex items-center gap-1.5 min-h-[38px] px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
               >
                 <Printer weight="bold" className="w-4 h-4" />
                 <span>{t('printPayslip')}</span>
@@ -584,7 +585,7 @@ export const PayrollPage: React.FC = () => {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-sm font-semibold text-slate-800 mb-1.5">
               {t('targetEmployeeLabel')}
             </label>
             <BehavioralHistorySelect
@@ -606,7 +607,7 @@ export const PayrollPage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="profBaseSalary" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="profBaseSalary" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('monthlyBaseSalaryLabel')}
               </label>
               <input
@@ -619,12 +620,12 @@ export const PayrollPage: React.FC = () => {
                   setProfilePenaltyPerMin(Number((val / 22 / 480).toFixed(2)));
                 }}
                 required
-                className="w-full px-3 py-2 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('dailyRateLabel')}
               </label>
               <div className="w-full px-3 py-2 text-xs font-mono bg-slate-100 rounded-xl text-slate-600 tabular-nums">
@@ -634,7 +635,7 @@ export const PayrollPage: React.FC = () => {
           </div>
 
           <div>
-            <label htmlFor="profLatePenalty" className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="profLatePenalty" className="block text-sm font-semibold text-slate-800 mb-1.5">
               {t('latePenaltyRateLabel')}
             </label>
             <input
@@ -644,9 +645,9 @@ export const PayrollPage: React.FC = () => {
               value={profilePenaltyPerMin}
               onChange={(e) => setProfilePenaltyPerMin(Number(e.target.value))}
               required
-              className="w-full px-3 py-2 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+              className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
             />
-            <span className="text-[10px] text-slate-400 mt-1 block">
+            <span className="text-xs text-slate-400 mt-1 block">
               {t('latePenaltyFormula')}
             </span>
           </div>
@@ -662,7 +663,7 @@ export const PayrollPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSavingProfile}
-              className="inline-flex items-center gap-2 min-h-[38px] px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold active:scale-[0.98] transition-[transform,background-color] disabled:opacity-60 cursor-pointer"
+              className="inline-flex items-center gap-2 min-h-[38px] px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold active:scale-[0.98] transition-[transform,background-color] disabled:opacity-60 cursor-pointer"
             >
               {isSavingProfile ? (
                 <>

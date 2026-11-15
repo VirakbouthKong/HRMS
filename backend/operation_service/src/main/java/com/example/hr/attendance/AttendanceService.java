@@ -1,7 +1,6 @@
 package com.example.hr.attendance;
 
 import com.example.hr.attendance.dto.AttendanceResponse;
-import com.example.hr.attendance.dto.CorrectionResponse;
 import com.example.hr.attendance.dto.DailySummaryResponse;
 import com.example.hr.attendance.dto.MarkAbsencesResponse;
 import com.example.hr.attendance.exception.AttendanceNotFoundException;
@@ -54,22 +53,6 @@ public class AttendanceService {
                 a.getCheckOut(),
                 a.getLateMinutes(),
                 a.getStatus()
-        );
-    }
-
-    private CorrectionResponse toCorrectionResponse(AttendanceCorrectionAudit a) {
-        String correctedByName = a.getCorrectedBy().getFirstName() + " " + a.getCorrectedBy().getLastName();
-        return new CorrectionResponse(
-                a.getCorrectionAuditId(),
-                a.getAttendance().getAttendanceId(),
-                a.getCorrectedBy().getEmployeeId(),
-                correctedByName,
-                a.getCorrectionReason(),
-                a.getPreviousCheckIn(),
-                a.getPreviousCheckOut(),
-                a.getPreviousLateMinutes(),
-                a.getPreviousStatus(),
-                a.getCorrectedAt()
         );
     }
 
@@ -150,7 +133,9 @@ public class AttendanceService {
         Attendance attendance = attendanceRepository.findById(attendanceId)
                 .orElseThrow(() -> new AttendanceNotFoundException(attendanceId));
 
-        Employee corrector = employeeRepository.findById(correctorId)
+        validateTimes(attendance.getAttendanceDate(), newCheckIn, newCheckOut);
+
+        Employee corrector = correctorId == null ? null : employeeRepository.findById(correctorId)
                 .orElseThrow(() -> new EmployeeNotFoundException(correctorId));
 
         AttendanceCorrectionAudit audit = attendance.applyCorrection(corrector, reason, newCheckIn, newCheckOut, newStatus, newLateMinutes);
@@ -159,15 +144,13 @@ public class AttendanceService {
         return toResponse(saved);
     }
 
-    @Transactional(readOnly = true)
-    public List<CorrectionResponse> getCorrectionHistory(Integer attendanceId) {
-        attendanceRepository.findById(attendanceId)
-                .orElseThrow(() -> new AttendanceNotFoundException(attendanceId));
-
-        return correctionAuditRepository.findByAttendanceAttendanceIdOrderByCorrectedAtDesc(attendanceId).stream()
-                .map(this::toCorrectionResponse)
-                .collect(Collectors.toList());
+    public static void validateTimes(LocalDate date, LocalDateTime checkIn, LocalDateTime checkOut) {
+        if (checkIn == null || !checkIn.toLocalDate().equals(date))
+            throw new IllegalArgumentException("Check-in must be on the attendance date");
+        if (checkOut != null && (!checkOut.toLocalDate().equals(date) || checkOut.isBefore(checkIn)))
+            throw new IllegalArgumentException("Check-out must be on the attendance date and after check-in");
     }
+
 
     public MarkAbsencesResponse markAbsences(LocalDate date) {
         List<Employee> activeEmployees = employeeRepository.findByStatus(EmployeeStatus.ACTIVE);

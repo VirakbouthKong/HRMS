@@ -1,0 +1,36 @@
+# Use with docker-compose.yml. Start services sequentially with --no-deps --no-build.
+# Compile JARs locally first, then use Dockerfile.prebuilt to avoid a Maven container.
+x-laptop: &laptop
+  mem_limit: 512m
+  cpus: 1.0
+  restart: "no"
+
+x-java: &java
+  JAVA_TOOL_OPTIONS: "-Xms64m -Xmx256m -XX:ActiveProcessorCount=2 -XX:+UseSerialGC"
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "3"
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: "1"
+
+services:
+  config-server:
+    <<: *laptop
+    mem_limit: 384m
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms32m -Xmx128m -XX:ActiveProcessorCount=2 -XX:+UseSerialGC"
+  mailpit:
+    mem_limit: 96m
+    restart: "no"
+  auth-service:
+    <<: *laptop
+    environment: *java
+  operation-service:
+    <<: *laptop
+    environment: *java
+  report-service:
+    <<: *laptop
+    environment: *java
+  cron-service:
+    <<: *laptop
+    environment: *java
+  api-gateway:
+    <<: *laptop
+    environment: *java

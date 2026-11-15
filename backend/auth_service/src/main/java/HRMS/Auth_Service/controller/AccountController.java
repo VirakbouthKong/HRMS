@@ -24,8 +24,8 @@ public class AccountController {
     }
 
     @PostMapping
-    public ApiResponse createAccount(@Valid @RequestBody CreateAccountRequest request) {
-        return accountService.createAccount(request);
+    public ResponseEntity<ApiResponse> createAccount(@Valid @RequestBody CreateAccountRequest request) {
+        return ActionReplies.from(accountService.createAccount(request));
     }
 
     @GetMapping
@@ -44,15 +44,15 @@ public class AccountController {
     }
 
     @PutMapping("/{id}")
-    public ApiResponse updateAccount(@PathVariable Integer id,
-                                     @RequestBody UpdateAccountRequest request) {
+    public ResponseEntity<ApiResponse> updateAccount(@PathVariable Integer id,
+                                     @Valid @RequestBody UpdateAccountRequest request) {
 
-        return accountService.updateAccount(id, request);
+        return ActionReplies.from(accountService.updateAccount(id, request));
     }
 
     @DeleteMapping("/{id}")
-    public ApiResponse deleteAccount(@PathVariable Integer id) {
-        return accountService.deleteAccount(id);
+    public ResponseEntity<ApiResponse> deleteAccount(@PathVariable Integer id) {
+        return ActionReplies.from(accountService.deleteAccount(id));
     }
 
 }

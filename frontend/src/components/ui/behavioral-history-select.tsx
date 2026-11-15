@@ -183,7 +183,7 @@ export const BehavioralHistorySelect: React.FC<BehavioralHistorySelectProps> = (
         <SelectTrigger
           id={id}
           className={cn(
-            "w-full bg-white border-slate-200 text-xs text-slate-800 rounded-xl shadow-sm focus:ring-blue-500/20",
+            "w-full bg-white border-slate-200 text-xs text-slate-800 rounded-xl shadow-sm focus:ring-brand-500/20",
             disabled && "opacity-50 cursor-not-allowed"
           )}
           style={fixedWidthStyle ? { width: fixedWidthStyle, minWidth: fixedWidthStyle } : undefined}
@@ -197,7 +197,7 @@ export const BehavioralHistorySelect: React.FC<BehavioralHistorySelectProps> = (
         >
           {label && (
             <SelectGroup>
-              <SelectLabel className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 py-1.5">
+              <SelectLabel className="text-xs font-semibold text-slate-400 px-3 py-1.5">
                 {label}
               </SelectLabel>
             </SelectGroup>
@@ -205,7 +205,7 @@ export const BehavioralHistorySelect: React.FC<BehavioralHistorySelectProps> = (
 
           {recentItems.length > 0 && (
             <SelectGroup>
-              <SelectLabel className="text-[10px] font-bold uppercase tracking-wider text-blue-600 px-3 py-1">
+              <SelectLabel className="text-xs font-semibold text-brand-600 px-3 py-1">
                 {t("recentGroup")}
               </SelectLabel>
               {recentItems.map((opt) => {
@@ -214,11 +214,11 @@ export const BehavioralHistorySelect: React.FC<BehavioralHistorySelectProps> = (
                   <SelectItem
                     key={`recent-${opt.value}`}
                     value={opt.value}
-                    className="flex justify-between items-center w-full text-xs text-slate-700 py-2 cursor-pointer hover:bg-slate-50 focus:bg-blue-50 focus:text-blue-700"
+                    className="flex justify-between items-center w-full text-xs text-slate-700 py-2 cursor-pointer hover:bg-slate-50 focus:bg-brand-50 focus:text-brand-700"
                   >
                     <span>{opt.label}</span>
                     {stored && (
-                      <span className="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full ml-auto">
+                      <span className="text-xs font-mono bg-brand-100 text-brand-800 px-2 py-0.5 rounded-full ml-auto">
                         {stored.count}×
                       </span>
                     )}
@@ -231,7 +231,7 @@ export const BehavioralHistorySelect: React.FC<BehavioralHistorySelectProps> = (
           {otherItems.length > 0 && (
             <SelectGroup>
               {recentItems.length > 0 && (
-                <SelectLabel className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-3 py-1">
+                <SelectLabel className="text-xs font-semibold text-slate-400 px-3 py-1">
                   {t("otherOptionsGroup")}
                 </SelectLabel>
               )}
@@ -239,7 +239,7 @@ export const BehavioralHistorySelect: React.FC<BehavioralHistorySelectProps> = (
                 <SelectItem
                   key={`other-${opt.value}`}
                   value={opt.value}
-                  className="text-xs text-slate-700 py-2 cursor-pointer hover:bg-slate-50 focus:bg-blue-50 focus:text-blue-700"
+                  className="text-xs text-slate-700 py-2 cursor-pointer hover:bg-slate-50 focus:bg-brand-50 focus:text-brand-700"
                 >
                   {opt.label}
                 </SelectItem>

@@ -50,6 +50,13 @@ public class EmployeeController {
         return employeeService.myJobHistory(currentEmployeeId());
     }
 
+    /** Employees keep their own contact details up to date; HR-owned fields are not touched. */
+    @PatchMapping("/me/contact")
+    @PreAuthorize("isAuthenticated()")
+    public EmployeeResponse updateMyContact(@Valid @RequestBody com.example.hr.employee.dto.ContactUpdateRequest request) {
+        return employeeService.updateMyContact(currentEmployeeId(), request);
+    }
+
     @GetMapping("/{employeeId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'HR_MANAGER', 'HR_STAFF')")
     public EmployeeResponse getEmployee(@PathVariable Integer employeeId) {

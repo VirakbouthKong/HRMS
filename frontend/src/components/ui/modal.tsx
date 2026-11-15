@@ -74,7 +74,7 @@ export const Modal: React.FC<ModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/40 animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -83,7 +83,7 @@ export const Modal: React.FC<ModalProps> = ({
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          'w-full bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 focus:outline-none',
+          'w-full bg-white rounded-xl shadow-xl border border-slate-200 max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 focus:outline-none',
           maxWidthClasses[maxWidth] || 'max-w-md',
           className
         )}
@@ -92,14 +92,14 @@ export const Modal: React.FC<ModalProps> = ({
         {title && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
             <div>
-              <h3 id={titleId} className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
-              {subtitle && <p className="text-[11px] text-slate-400 mt-0.5">{subtitle}</p>}
+              <h2 id={titleId} className="text-lg font-semibold text-slate-900 tracking-tight">{title}</h2>
+              {subtitle && <p className="text-[13px] text-slate-500 mt-1">{subtitle}</p>}
             </div>
             <button
               onClick={onClose}
               type="button"
               aria-label={t('closeDialog')}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none transition-colors cursor-pointer"
+              className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none transition-colors cursor-pointer"
             >
               <X weight="bold" className="w-4 h-4" />
             </button>
@@ -183,7 +183,7 @@ export const Drawer: React.FC<DrawerProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? titleId : undefined}
-      className="fixed inset-0 z-[100] flex justify-end bg-slate-950/50 backdrop-blur-md animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex justify-end bg-slate-950/40 animate-in fade-in duration-200"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -192,7 +192,7 @@ export const Drawer: React.FC<DrawerProps> = ({
         ref={panelRef}
         tabIndex={-1}
         className={cn(
-          'w-full bg-white h-full shadow-2xl flex flex-col justify-between p-6 overflow-y-auto overscroll-contain animate-in slide-in-from-right duration-200 border-l border-slate-200/80 focus:outline-none',
+          'w-full bg-white h-full shadow-2xl flex flex-col justify-between p-6 overflow-y-auto overscroll-contain animate-in slide-in-from-right duration-200 border-l border-slate-200 focus:outline-none',
           widthClasses[width] || 'max-w-md',
           className
         )}
@@ -201,14 +201,14 @@ export const Drawer: React.FC<DrawerProps> = ({
           {title && (
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
               <div>
-                <h3 id={titleId} className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
-                {subtitle && <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>}
+                <h2 id={titleId} className="text-lg font-semibold text-slate-900 tracking-tight">{title}</h2>
+                {subtitle && <p className="text-[13px] text-slate-500 mt-1">{subtitle}</p>}
               </div>
               <button
                 onClick={onClose}
                 type="button"
                 aria-label={t('closeDrawer')}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none transition-colors cursor-pointer"
+                className="w-9 h-9 inline-flex items-center justify-center rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none transition-colors cursor-pointer"
               >
                 <X weight="bold" className="w-4 h-4" />
               </button>

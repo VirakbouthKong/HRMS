@@ -22,7 +22,8 @@ export const LeaveSummaryChart: React.FC = () => {
   const categories = rawCategories.map((c) => tLeaveType(c));
   const counts = Object.values(typeCounts);
 
-  const palette = ['#06B6D4', '#10B981', '#3B82F6', '#F59E0B', '#8B5CF6', '#EC4899'];
+  // Categorical order validated for colour-blind separation; assign in this fixed order.
+  const palette = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
 
   const data = {
     labels: categories,
@@ -54,13 +55,13 @@ export const LeaveSummaryChart: React.FC = () => {
   };
 
   return (
-    <div className="bg-white/90 backdrop-blur-md rounded-2xl p-6 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col h-full justify-between">
+    <div className="bg-white rounded-xl p-6 border border-slate-200 flex flex-col h-full justify-between">
       <div className="flex items-center justify-between mb-2">
         <div>
           <h2 className="text-sm font-bold text-slate-900 tracking-tight">{t('leaveDistTitle')}</h2>
-          <p className="text-[11px] text-slate-400 mt-0.5">{t('leaveDistSub')}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{t('leaveDistSub')}</p>
         </div>
-        <span className="text-[11px] font-mono font-semibold text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100">
+        <span className="text-xs font-mono font-semibold text-brand-600 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-100">
           {t('totalSuffix', { count: leaves.length })}
         </span>
       </div>
@@ -71,7 +72,7 @@ export const LeaveSummaryChart: React.FC = () => {
             <CalendarCheck weight="duotone" className="w-6 h-6 text-slate-400" />
           </div>
           <p className="text-xs font-semibold text-slate-700">{t('noLeaveRecords')}</p>
-          <p className="text-[11px] text-slate-400 mt-1 max-w-[240px] leading-relaxed">
+          <p className="text-xs text-slate-400 mt-1 max-w-[240px] leading-relaxed">
             {t('noLeaveRecordsDesc')}
           </p>
         </div>
@@ -94,8 +95,8 @@ export const LeaveSummaryChart: React.FC = () => {
                     style={{ backgroundColor: palette[idx % palette.length] }}
                   />
                   <span className="truncate text-xs font-medium text-slate-700 flex-1">{label}</span>
-                  <span className="text-[11px] font-mono font-semibold text-slate-800 tabular-nums">
-                    {count} <span className="text-[10px] text-slate-400 font-normal">({pct}%)</span>
+                  <span className="text-xs font-mono font-semibold text-slate-800 tabular-nums">
+                    {count} <span className="text-xs text-slate-400 font-normal">({pct}%)</span>
                   </span>
                 </div>
               );

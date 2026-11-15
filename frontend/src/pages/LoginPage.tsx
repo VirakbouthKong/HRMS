@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Buildings,
+  Leaf,
+  Clock,
+  CalendarCheck,
+  Wallet,
   User,
   Lock,
   Eye,
@@ -23,10 +26,12 @@ import { authApi, TokenResponse } from '../api';
 import { Modal } from '../components/ui/modal';
 import { LanguageSwitcher } from '../components/ui/LanguageSwitcher';
 import { useI18n } from '../i18n/useI18n';
+import { useAppConfig } from '../lib/appConfig';
 
 export const LoginPage: React.FC = () => {
   const { login } = useHrmsStore();
   const { t } = useI18n();
+  const { limits } = useAppConfig();
 
   const [mode, setMode] = useState<'login' | 'otp' | 'reset'>('login');
   const [userName, setUserName] = useState('sysadmin');
@@ -260,8 +265,8 @@ export const LoginPage: React.FC = () => {
       setFirstLoginError(t('errEnterTempPwd'));
       return;
     }
-    if (!firstLoginNewPassword || firstLoginNewPassword.length < 8) {
-      setFirstLoginError(t('errMinPwdLen'));
+    if (!firstLoginNewPassword || firstLoginNewPassword.length < limits.passwordMinLength) {
+      setFirstLoginError(t('errMinPwdLen', { min: limits.passwordMinLength }));
       return;
     }
     if (firstLoginNewPassword === firstLoginCurrentPassword) {
@@ -342,40 +347,39 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-[#eaf1f7] relative overflow-hidden">
-      {/* Ambient background glow */}
-      <div
-        aria-hidden="true"
-        className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-gradient-to-b from-blue-200/40 via-sky-100/20 to-transparent blur-3xl pointer-events-none"
-      />
+    <div className="hrms-login min-h-screen w-full flex flex-col bg-[#F5F6F4]">
+      {/* Top bar: brand + language */}
+      <header className="flex flex-wrap items-center justify-between gap-3 px-5 sm:px-8 py-5">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center">
+            <Leaf weight="bold" className="w-5 h-5" />
+          </div>
+          <span className="font-heading text-[17px] font-bold tracking-tight text-slate-900">
+            {t('brandName')}
+          </span>
+        </div>
+        <LanguageSwitcher variant="login" />
+      </header>
 
-      {/* Main Login Container */}
-      <div className="relative w-full max-w-md z-10 space-y-5 animate-fadeIn">
-        {/* Brand Header */}
-        <div className="flex flex-col items-center text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-lg shadow-slate-900/20">
-            <Buildings weight="duotone" className="w-7 h-7 text-blue-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              {t('brandName')}
-            </h1>
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-widest mt-0.5">
-              {t('brandTagline')}
-            </p>
-          </div>
+      <main className="flex-1 flex flex-col items-center justify-center gap-7 px-4 pt-2 pb-14">
+        {/* Welcome */}
+        <div className="text-center max-w-xl animate-fadeIn">
+          <h1 className="text-3xl sm:text-[40px] leading-tight font-bold tracking-tight text-slate-900">
+            {t('loginWelcome')}
+          </h1>
+          <p className="mt-2.5 text-base text-slate-500 leading-relaxed">{t('loginWelcomeSub')}</p>
         </div>
 
         {/* Card Box */}
-        <div className="bg-white/90 backdrop-blur-xl border border-white/80 shadow-[0_20px_50px_rgba(15,23,42,0.06)] rounded-3xl p-7 sm:p-8 space-y-5">
-          {/* Login Card Header with Flag-Only Language Switcher */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>{t('gatewayLabel')}</span>
+        <div className="w-full max-w-[400px] bg-white border border-slate-200 rounded-[22px] p-7 sm:p-8 space-y-5 animate-fadeIn">
+          {mode === 'login' && (
+            <div>
+              <h2 className="text-[22px] font-semibold tracking-tight text-slate-900">
+                {t('loginCardTitle')}
+              </h2>
+              <p className="mt-1.5 text-sm text-slate-500 leading-relaxed">{t('loginCardSub')}</p>
             </div>
-            <LanguageSwitcher variant="login" />
-          </div>
+          )}
 
           {/* Status / Alert Banner */}
           {errorMessage && (
@@ -398,11 +402,11 @@ export const LoginPage: React.FC = () => {
             <div
               role="status"
               aria-live="polite"
-              className="p-3.5 rounded-xl bg-blue-50 border border-blue-200/80 text-xs text-blue-700 flex items-start gap-2.5 animate-fadeIn"
+              className="p-3.5 rounded-xl bg-brand-50 border border-brand-200/80 text-xs text-brand-700 flex items-start gap-2.5 animate-fadeIn"
             >
               <CheckCircle
                 weight="fill"
-                className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5"
+                className="w-4 h-4 text-brand-600 flex-shrink-0 mt-0.5"
               />
               <div className="flex-1 font-medium leading-relaxed">
                 {statusMessage}
@@ -422,7 +426,7 @@ export const LoginPage: React.FC = () => {
               <div>
                 <label
                   htmlFor="login-username"
-                  className="block text-xs font-semibold text-slate-700 mb-1.5"
+                  className="block text-sm font-semibold text-slate-800 mb-1.5"
                 >
                   {t('loginUsernameLabel')}
                 </label>
@@ -440,7 +444,7 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setUserName(e.target.value)}
                     placeholder={t('loginUsernamePlaceholder')}
                     required
-                    className="w-full pl-10 pr-3.5 py-2.5 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors text-slate-900 placeholder:text-slate-400"
+                    className="w-full pl-10 pr-3.5 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors text-slate-900 placeholder:text-slate-400"
                   />
                 </div>
               </div>
@@ -449,7 +453,7 @@ export const LoginPage: React.FC = () => {
                 <div className="flex items-center justify-between mb-1.5">
                   <label
                     htmlFor="login-password"
-                    className="text-xs font-semibold text-slate-700"
+                    className="text-sm font-semibold text-slate-800"
                   >
                     {t('loginPasswordLabel')}
                   </label>
@@ -460,7 +464,7 @@ export const LoginPage: React.FC = () => {
                       setStatusMessage(null);
                       setMode('reset');
                     }}
-                    className="text-[11px] font-medium text-blue-600 hover:text-blue-700 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded px-1 cursor-pointer"
+                    className="text-[13px] font-semibold text-brand-700 hover:text-brand-800 hover:underline focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none rounded px-1 cursor-pointer"
                   >
                     {t('forgotPassword')}
                   </button>
@@ -478,13 +482,13 @@ export const LoginPage: React.FC = () => {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
                     required
-                    className="w-full pl-10 pr-10 py-2.5 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors text-slate-900 placeholder:text-slate-400"
+                    className="w-full pl-10 pr-10 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors text-slate-900 placeholder:text-slate-400"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded-r-xl cursor-pointer"
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none rounded-r-xl cursor-pointer"
                   >
                     {showPassword ? (
                       <EyeSlash weight="regular" className="w-4 h-4" />
@@ -495,13 +499,13 @@ export const LoginPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-600 pt-1">
+              <div className="flex items-center justify-between text-sm text-slate-600 pt-1">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded text-blue-600 border-slate-300 focus:ring-blue-500"
+                    className="w-4 h-4 rounded accent-brand-600 border-slate-300 focus:ring-brand-500"
                   />
                   <span>{t('rememberBrowser')}</span>
                 </label>
@@ -510,7 +514,7 @@ export const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 min-h-[42px] py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white text-xs font-semibold shadow-md shadow-slate-900/10 transition-[transform,background-color] duration-150 disabled:opacity-70 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                className="w-full flex items-center justify-center gap-2 min-h-[48px] py-2.5 px-4 rounded-full bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white text-sm font-semibold transition-[transform,background-color] duration-150 disabled:opacity-70 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none cursor-pointer"
               >
                 {isLoading ? (
                   <>
@@ -531,7 +535,7 @@ export const LoginPage: React.FC = () => {
           {mode === 'otp' && (
             <form onSubmit={handleOtpVerify} className="space-y-4 animate-fadeIn">
               <div className="text-center space-y-1">
-                <div className="inline-flex p-3 rounded-full bg-blue-50 text-blue-600 mb-1">
+                <div className="inline-flex p-3 rounded-full bg-brand-50 text-brand-600 mb-1">
                   <ShieldCheck weight="duotone" className="w-8 h-8" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-900">
@@ -546,16 +550,16 @@ export const LoginPage: React.FC = () => {
               </div>
 
               {/* 1-Click Mailpit OTP Auto-Fill Badge / Button */}
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-50/80 to-indigo-50/80 border border-blue-200/80 flex items-center justify-between gap-3">
+              <div className="p-3 rounded-2xl bg-brand-50 border border-brand-200 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="p-1.5 rounded-lg bg-blue-600 text-white shadow-xs">
+                  <div className="p-1.5 rounded-lg bg-brand-600 text-white shadow-xs">
                     <Sparkle weight="fill" className="w-3.5 h-3.5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[11px] font-bold text-slate-800 truncate">
+                    <div className="text-xs font-bold text-slate-800 truncate">
                       {t('mailpitInboxTitle')}
                     </div>
-                    <div className="text-[10px] text-slate-500 truncate">
+                    <div className="text-xs text-slate-500 truncate">
                       {t('mailpitInboxSubtitle')}
                     </div>
                   </div>
@@ -565,7 +569,7 @@ export const LoginPage: React.FC = () => {
                   type="button"
                   onClick={handleFetchMailpitOtp}
                   disabled={isFetchingMailpit}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-blue-200 text-[11px] font-semibold text-blue-700 hover:bg-blue-600 hover:text-white hover:border-blue-600 active:scale-[0.96] transition-[transform,background-color,border-color,color] duration-150 shadow-xs disabled:opacity-60 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-brand-200 text-xs font-semibold text-brand-700 hover:bg-brand-600 hover:text-white hover:border-brand-600 active:scale-[0.96] transition-[transform,background-color,border-color,color] duration-150 shadow-xs disabled:opacity-60 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
                 >
                   {isFetchingMailpit ? (
                     <>
@@ -584,7 +588,7 @@ export const LoginPage: React.FC = () => {
               <div>
                 <label
                   htmlFor="login-otp"
-                  className="block text-xs font-semibold text-slate-700 mb-1.5 text-center"
+                  className="block text-sm font-semibold text-slate-800 mb-1.5 text-center"
                 >
                   {t('sixDigitOtpLabel')}
                 </label>
@@ -598,7 +602,7 @@ export const LoginPage: React.FC = () => {
                   onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                   placeholder="••••••"
                   required
-                  className="w-full text-center tracking-[0.6em] text-xl font-mono py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors text-slate-900 font-bold placeholder:tracking-normal placeholder:font-sans placeholder:text-slate-300"
+                  className="w-full text-center tracking-[0.6em] text-xl font-mono py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors text-slate-900 font-bold placeholder:tracking-normal placeholder:font-sans placeholder:text-slate-300"
                 />
               </div>
 
@@ -606,7 +610,7 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 min-h-[42px] py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-xs font-semibold shadow-md shadow-blue-600/20 transition-[transform,background-color] duration-150 disabled:opacity-70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 min-h-[48px] py-2.5 px-4 rounded-full bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white text-sm font-semibold transition-[transform,background-color] duration-150 disabled:opacity-70 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none cursor-pointer"
                 >
                   {isLoading ? (
                     <>
@@ -628,7 +632,7 @@ export const LoginPage: React.FC = () => {
                       setMode('login');
                       setErrorMessage(null);
                     }}
-                    className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded px-1 py-0.5 cursor-pointer"
+                    className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none rounded px-1 py-0.5 cursor-pointer"
                   >
                     <ArrowLeft weight="bold" className="w-3.5 h-3.5" />
                     <span>{t('backToSignIn')}</span>
@@ -638,7 +642,7 @@ export const LoginPage: React.FC = () => {
                     type="button"
                     onClick={handleResendOtp}
                     disabled={isLoading}
-                    className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded px-1 py-0.5 cursor-pointer"
+                    className="flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:text-brand-700 transition-colors disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none rounded px-1 py-0.5 cursor-pointer"
                   >
                     <ArrowsClockwise weight="bold" className="w-3.5 h-3.5" />
                     <span>{t('resendCode')}</span>
@@ -666,7 +670,7 @@ export const LoginPage: React.FC = () => {
               <div>
                 <label
                   htmlFor="reset-username"
-                  className="block text-xs font-semibold text-slate-700 mb-1.5"
+                  className="block text-sm font-semibold text-slate-800 mb-1.5"
                 >
                   {t('confirmUsername')}
                 </label>
@@ -679,14 +683,14 @@ export const LoginPage: React.FC = () => {
                   onChange={(e) => setUserName(e.target.value)}
                   placeholder={t('loginUsernamePlaceholder')}
                   required
-                  className="w-full px-3.5 py-2.5 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors"
+                  className="w-full px-3.5 py-2.5 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors"
                 />
               </div>
 
               <div>
                 <label
                   htmlFor="reset-new-password"
-                  className="block text-xs font-semibold text-slate-700 mb-1.5"
+                  className="block text-sm font-semibold text-slate-800 mb-1.5"
                 >
                   {t('newPasswordLabel')}
                 </label>
@@ -698,8 +702,8 @@ export const LoginPage: React.FC = () => {
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder={t('newPasswordPlaceholder')}
                   required
-                  minLength={8}
-                  className="w-full px-3.5 py-2.5 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors"
+                  minLength={limits.passwordMinLength}
+                  className="w-full px-3.5 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors"
                 />
               </div>
 
@@ -707,7 +711,7 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 min-h-[42px] py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white text-xs font-semibold shadow-md transition-[transform,background-color] duration-150 disabled:opacity-70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 min-h-[48px] py-2.5 px-4 rounded-full bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white text-sm font-semibold transition-[transform,background-color] duration-150 disabled:opacity-70 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none cursor-pointer"
                 >
                   {isLoading ? (
                     <>
@@ -725,7 +729,7 @@ export const LoginPage: React.FC = () => {
                     setMode('login');
                     setErrorMessage(null);
                   }}
-                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded-xl cursor-pointer"
+                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-medium text-slate-500 hover:text-slate-800 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none rounded-xl cursor-pointer"
                 >
                   <ArrowLeft weight="bold" className="w-3.5 h-3.5" />
                   <span>{t('cancelAndReturn')}</span>
@@ -736,12 +740,12 @@ export const LoginPage: React.FC = () => {
 
           {/* Default Enterprise Access Credentials */}
           <div className="pt-4 border-t border-slate-100/90 text-center">
-            <div className="text-[11px] text-slate-400">
+            <div className="text-xs text-slate-400">
               {t('authorizedSysAdmin')}{' '}
               <button
                 type="button"
                 onClick={() => setUserName('sysadmin')}
-                className="font-mono text-slate-700 font-semibold bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                className="font-mono text-slate-700 font-semibold bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
                 title="sysadmin"
               >
                 sysadmin
@@ -750,12 +754,29 @@ export const LoginPage: React.FC = () => {
           </div>
         </div>
 
+        {/* What the app does */}
+        <ul className="flex flex-wrap justify-center gap-2.5 max-w-2xl">
+          {[
+            { icon: Clock, label: t('loginFeatAttendance') },
+            { icon: CalendarCheck, label: t('loginFeatLeave') },
+            { icon: Wallet, label: t('loginFeatPayroll') },
+          ].map(({ icon: Icon, label }) => (
+            <li
+              key={label}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border border-slate-200 text-[13px] font-medium text-slate-600"
+            >
+              <Icon weight="regular" className="w-4 h-4 text-brand-600 shrink-0" />
+              <span>{label}</span>
+            </li>
+          ))}
+        </ul>
+
         {/* Security & Architecture Note */}
-        <div className="text-center text-[11px] text-slate-400 flex items-center justify-center gap-2">
-          <ShieldCheck weight="bold" className="w-4 h-4 text-emerald-600 shrink-0" />
+        <div className="text-center text-xs text-slate-500 flex items-center justify-center gap-2">
+          <ShieldCheck weight="bold" className="w-4 h-4 text-brand-600 shrink-0" />
           <span>{t('securityFooter')}</span>
         </div>
-      </div>
+      </main>
 
       {/* First-Login Interception Modal */}
       <Modal
@@ -774,7 +795,7 @@ export const LoginPage: React.FC = () => {
           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200/80 text-xs text-amber-900 flex items-start gap-2.5">
             <ShieldWarning
               weight="fill"
-              className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"
+              className="w-4 h-4 text-amber-700 flex-shrink-0 mt-0.5"
             />
             <div className="leading-relaxed">
               <strong>{t('firstLoginNoticeTitle')}</strong>{' '}
@@ -801,7 +822,7 @@ export const LoginPage: React.FC = () => {
           <div>
             <label
               htmlFor="first-login-old-pwd"
-              className="block text-xs font-semibold text-slate-700 mb-1.5"
+              className="block text-sm font-semibold text-slate-800 mb-1.5"
             >
               {t('currentTempPassword')}
             </label>
@@ -817,13 +838,13 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => setFirstLoginCurrentPassword(e.target.value)}
                 placeholder={t('enterCurrentPasswordPlaceholder')}
                 required
-                className="w-full pl-10 pr-10 py-2.5 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors text-slate-900"
+                className="w-full pl-10 pr-10 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors text-slate-900"
               />
               <button
                 type="button"
                 onClick={() => setShowModalOldPassword(!showModalOldPassword)}
                 aria-label={showModalOldPassword ? 'Hide current password' : 'Show current password'}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded-r-xl cursor-pointer"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none rounded-r-xl cursor-pointer"
               >
                 {showModalOldPassword ? (
                   <EyeSlash weight="regular" className="w-4 h-4" />
@@ -837,7 +858,7 @@ export const LoginPage: React.FC = () => {
           <div>
             <label
               htmlFor="first-login-new-pwd"
-              className="block text-xs font-semibold text-slate-700 mb-1.5"
+              className="block text-sm font-semibold text-slate-800 mb-1.5"
             >
               {t('newPermanentPassword')}
             </label>
@@ -853,14 +874,14 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => setFirstLoginNewPassword(e.target.value)}
                 placeholder={t('newPasswordPlaceholder')}
                 required
-                minLength={8}
-                className="w-full pl-10 pr-10 py-2.5 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors text-slate-900"
+                minLength={limits.passwordMinLength}
+                className="w-full pl-10 pr-10 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors text-slate-900"
               />
               <button
                 type="button"
                 onClick={() => setShowModalNewPassword(!showModalNewPassword)}
                 aria-label={showModalNewPassword ? 'Hide new password' : 'Show new password'}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none rounded-r-xl cursor-pointer"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none rounded-r-xl cursor-pointer"
               >
                 {showModalNewPassword ? (
                   <EyeSlash weight="regular" className="w-4 h-4" />
@@ -874,7 +895,7 @@ export const LoginPage: React.FC = () => {
           <div>
             <label
               htmlFor="first-login-confirm-pwd"
-              className="block text-xs font-semibold text-slate-700 mb-1.5"
+              className="block text-sm font-semibold text-slate-800 mb-1.5"
             >
               {t('confirmNewPassword')}
             </label>
@@ -890,8 +911,8 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => setFirstLoginConfirmPassword(e.target.value)}
                 placeholder={t('reenterNewPasswordPlaceholder')}
                 required
-                minLength={8}
-                className="w-full pl-10 pr-3.5 py-2.5 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors text-slate-900"
+                minLength={limits.passwordMinLength}
+                className="w-full pl-10 pr-3.5 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors text-slate-900"
               />
             </div>
           </div>
@@ -905,14 +926,14 @@ export const LoginPage: React.FC = () => {
                   localStorage.removeItem('hrms_jwt_token');
                 }
               }}
-              className="min-h-[40px] px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+              className="min-h-[40px] px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 rounded-xl hover:bg-slate-100 transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
             >
               {t('cancel')}
             </button>
             <button
               type="submit"
               disabled={isChangingPassword}
-              className="flex items-center gap-2 min-h-[40px] px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold shadow-md shadow-blue-600/20 active:scale-[0.98] transition-[transform,background-color] duration-150 disabled:opacity-70 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+              className="flex items-center gap-2 min-h-[40px] px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-md shadow-brand-600/20 active:scale-[0.98] transition-[transform,background-color] duration-150 disabled:opacity-70 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
             >
               {isChangingPassword ? (
                 <>

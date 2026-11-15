@@ -3,19 +3,27 @@ import {
   Clock,
   SignIn,
   SignOut,
-  CalendarCheck,
   WarningCircle,
   CheckCircle,
-  UserCheck,
-  ClockCountdown,
-  ShieldCheck,
   PencilSimple,
   CircleNotch,
+  CaretLeft,
+  CaretRight,
 } from '@phosphor-icons/react';
 import { useHrmsStore } from '../store/useHrmsStore';
 import { hasPermission } from '../utils/rbac';
 import { AttendanceRecord } from '../types';
-import { Modal, Drawer } from '../components/ui/modal';
+import { Modal } from '../components/ui/modal';
+import {
+  DashboardCard,
+  EmptyState,
+  InitialsAvatar,
+  StatusChip,
+  localeFor,
+  parseDateKey,
+} from '../components/dashboard/DashboardCard';
+import { FilterTabs } from '../components/ui/filter-tabs';
+import { attendanceApi } from '../api';
 import { useI18n } from '../i18n/useI18n';
 
 export const AttendancePage: React.FC = () => {
@@ -33,7 +41,9 @@ export const AttendancePage: React.FC = () => {
 
   // Modal / Drawer state
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
-  const [isQueueDrawerOpen, setIsQueueDrawerOpen] = useState(false);
+  const [view, setView] = useState<'log' | 'corrections'>('log');
+  const [selectedDay, setSelectedDay] = useState<string | undefined>(undefined);
+  const [busyCorrectionId, setBusyCorrectionId] = useState<number | null>(null);
   const [targetRecordForCorrection, setTargetRecordForCorrection] = useState<AttendanceRecord | null>(null);
 
   // Form State
@@ -48,7 +58,6 @@ export const AttendancePage: React.FC = () => {
 
   const canViewAll = hasPermission(currentUser.role, 'ATTENDANCE_VIEW_ALL');
   const canRequestCorrection = hasPermission(currentUser.role, 'ATTENDANCE_CORRECTION_REQUEST');
-  const isManager = currentUser.role === 'ROLE_ADMIN' || currentUser.role === 'ROLE_HR';
   const myEmployeeId = currentUser.employeeId || 1;
 
   const pendingCorrections = attendanceCorrections.filter((c) => c.status === 'PENDING');
@@ -74,22 +83,6 @@ export const AttendancePage: React.FC = () => {
   const isStatus = (status: string | undefined, target: string) =>
     status?.toUpperCase().replace(/\s+/g, '_') === target;
 
-  const presentCount = canViewAll
-    ? attendance.filter((a) => isStatus(a.status, 'PRESENT')).length
-    : displayedAttendance.filter((a) => isStatus(a.status, 'PRESENT')).length;
-
-  const lateCount = canViewAll
-    ? attendance.filter((a) => isStatus(a.status, 'LATE')).length
-    : displayedAttendance.filter((a) => isStatus(a.status, 'LATE')).length;
-
-  const onLeaveCount = canViewAll
-    ? attendance.filter((a) => isStatus(a.status, 'ON_LEAVE')).length
-    : displayedAttendance.filter((a) => isStatus(a.status, 'ON_LEAVE')).length;
-
-  const totalOtHours = canViewAll
-    ? attendance.reduce((sum, a) => sum + (a.otHours || 0), 0)
-    : displayedAttendance.reduce((sum, a) => sum + (a.otHours || 0), 0);
-
   const handleCheckIn = async () => {
     setIsPunching(true);
     setErrorMessage(null);
@@ -110,77 +103,155 @@ export const AttendancePage: React.FC = () => {
     }
   };
 
+  // --- Evergreen layout helpers (all figures derived from real attendance records) ---
+  const locale = localeFor(language);
+  const dayFmt = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const shortFmt = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short' });
+  const canReviewCorrections = hasPermission(currentUser.role, 'ATTENDANCE_CORRECTION_APPROVE');
+
+  // Days that have records, newest first; HR/admin browse one day at a time.
+  const availableDays = Array.from(new Set(attendance.map((a) => (a.attendanceDate || '').substring(0, 10)).filter(Boolean)))
+    .sort()
+    .reverse();
+  const activeDay = selectedDay && availableDays.includes(selectedDay)
+    ? selectedDay
+    : availableDays.includes(todayStr)
+    ? todayStr
+    : availableDays[0];
+  const dayIndex = availableDays.indexOf(activeDay);
+
+  const dayRecords = attendance
+    .filter((a) => (a.attendanceDate || '').startsWith(activeDay || '#'))
+    .sort((a, b) => (a.employeeName || '').localeCompare(b.employeeName || ''));
+  const monthPrefix = todayStr.substring(0, 7);
+  const myMonthRecords = displayedAttendance.filter((a) => (a.attendanceDate || '').startsWith(monthPrefix));
+  const tableRows = canViewAll
+    ? dayRecords
+    : [...displayedAttendance].sort((a, b) => b.attendanceDate.localeCompare(a.attendanceDate));
+
+  const countStatus = (rows: AttendanceRecord[], s: string) => rows.filter((a) => isStatus(a.status, s)).length;
+  const dayLate = dayRecords.filter((a) => isStatus(a.status, 'LATE'));
+  const avgLate = dayLate.length
+    ? Math.round(dayLate.reduce((sum, a) => sum + (a.lateMinutes || 0), 0) / dayLate.length)
+    : 0;
+  const monthName = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(currentTime);
+
+  const toMinutes = (hhmm?: string | null) => {
+    const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '');
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  const worked = (rec: AttendanceRecord) => {
+    const a = toMinutes(rec.checkIn);
+    const b = toMinutes(rec.checkOut);
+    if (a === null || b === null || b < a) return null;
+    return t('atDurationHm', { h: Math.floor((b - a) / 60), m: String((b - a) % 60).padStart(2, '0') });
+  };
+
+  const recordTone = (status?: string) =>
+    isStatus(status, 'PRESENT') ? 'ok' : isStatus(status, 'LATE') ? 'warn' : isStatus(status, 'ON_LEAVE') ? 'info' : 'bad';
+  const correctionTone = (status: string) => (status === 'APPROVED' ? 'ok' : status === 'REJECTED' ? 'bad' : 'warn');
+
+  const openCorrection = (rec: AttendanceRecord | null) => {
+    setTargetRecordForCorrection(rec);
+    setReqCheckIn(rec?.checkIn || '08:00');
+    setReqCheckOut(rec?.checkOut || '17:00');
+    setReqReason('');
+    setCorrectionError(null);
+    setIsCorrectionModalOpen(true);
+    if (!rec) return;
+    // Refresh the record (GET /api/attendance/{id}): the request is based on its current times,
+    // and the server refuses approval if they changed after the request was filed.
+    const hhmm = (v?: string | null) => (v ? (v.includes('T') ? v.split('T')[1] : v).substring(0, 5) : null);
+    attendanceApi
+      .getById(rec.attendanceId)
+      .then((raw: any) => {
+        if (!raw || raw.attendanceId !== rec.attendanceId) return;
+        const fresh = { ...rec, checkIn: hhmm(raw.checkIn), checkOut: hhmm(raw.checkOut), status: raw.status ?? rec.status };
+        setTargetRecordForCorrection(fresh);
+        setReqCheckIn(fresh.checkIn || '08:00');
+        setReqCheckOut(fresh.checkOut || '17:00');
+      })
+      .catch(() => {});
+  };
+
+  const reviewCorrection = async (correctionId: number, status: 'APPROVED' | 'REJECTED') => {
+    setErrorMessage(null);
+    setBusyCorrectionId(correctionId);
+    const result = await reviewAttendanceCorrection(correctionId, status);
+    setBusyCorrectionId(null);
+    if (!result.success) setErrorMessage(result.error || 'Failed to review correction.');
+  };
+
+  const sortedCorrections = [...attendanceCorrections].sort((a, b) =>
+    a.status === b.status ? (b.requestedAt || '').localeCompare(a.requestedAt || '') : a.status === 'PENDING' ? -1 : b.status === 'PENDING' ? 1 : 0
+  );
+
+  const StatTile = ({ label, value, sub, swatch }: { label: string; value: React.ReactNode; sub: string; swatch: string }) => (
+    <div className="bg-white rounded-xl border border-slate-200 px-5 py-4 flex flex-col gap-1.5 min-w-0">
+      <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-600">
+        <span aria-hidden="true" className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: swatch }} />
+        {label}
+      </span>
+      <span className="font-heading text-[28px] leading-tight font-semibold text-slate-900 tabular-nums">{value}</span>
+      <span className="text-[13px] text-slate-500">{sub}</span>
+    </div>
+  );
+
+  const smallBtn =
+    'inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-lg text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 focus-visible:outline-none';
+  const iconBtn =
+    'w-10 h-10 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none';
+  const dash = <span className="text-slate-500">—</span>;
+
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. Punch Station Card */}
-      <div className="bg-white/90 backdrop-blur-md rounded-2xl p-6 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] relative overflow-hidden">
+      {/* 1. Check-in card */}
+      <div className="bg-white rounded-xl p-6 border border-slate-200">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-brand-700 mb-1">
               <Clock weight="fill" className="w-4 h-4" />
               <span>{t('punchStationTitle')}</span>
             </div>
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums">
-              {currentTime.toLocaleTimeString(language === 'kh' ? 'km-KH' : 'en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-              })}
+            <div className="font-heading text-3xl font-semibold tracking-tight text-slate-900 tabular-nums">
+              {currentTime.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </div>
-            <div className="text-xs text-slate-500 mt-1">
-              {currentTime.toLocaleDateString(language === 'kh' ? 'km-KH' : 'en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-              })}
-              <span className="ml-2 text-slate-400">| {t('standardWorkdayNote')}</span>
+            <div className="text-sm text-slate-500 mt-1">
+              {currentTime.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              <span className="ml-2">· {t('standardWorkdayNote')}</span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               type="button"
               onClick={handleCheckIn}
               disabled={isCheckedIn || isPunching}
-              aria-label={t('checkInNow')}
-              className={`flex items-center gap-2 min-h-[42px] px-5 py-2.5 rounded-xl text-xs font-bold transition-[transform,background-color,color] duration-150 shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
+              className={`inline-flex items-center gap-2 h-11 px-5 rounded-lg text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none ${
                 isCheckedIn
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 active:scale-[0.97] text-white shadow-blue-500/20 cursor-pointer'
+                  ? 'bg-brand-50 text-brand-800 cursor-not-allowed'
+                  : 'bg-brand-600 hover:bg-brand-700 text-white cursor-pointer disabled:opacity-60'
               }`}
             >
               {isPunching && !isCheckedIn ? (
                 <CircleNotch weight="bold" className="w-4 h-4 animate-spin" />
               ) : isCheckedIn ? (
-                <>
-                  <CheckCircle weight="fill" className="w-4 h-4 text-emerald-600" />
-                  <span>{t('checkedInAt', { time: myRecordToday?.checkIn || '' })}</span>
-                </>
+                <CheckCircle weight="fill" className="w-4 h-4" />
               ) : (
-                <>
-                  <SignIn weight="bold" className="w-4 h-4" />
-                  <span>{t('checkInNow')}</span>
-                </>
+                <SignIn weight="bold" className="w-4 h-4" />
               )}
+              <span>{isCheckedIn ? t('checkedInAt', { time: myRecordToday?.checkIn || '' }) : t('checkInNow')}</span>
             </button>
 
             <button
               type="button"
               onClick={handleCheckOut}
               disabled={!isCheckedIn || isCheckedOut || isPunching}
-              aria-label={t('checkOut')}
-              className={`flex items-center gap-2 min-h-[42px] px-5 py-2.5 rounded-xl text-xs font-bold transition-[transform,background-color,color] duration-150 shadow-sm focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
-                isCheckedOut || !isCheckedIn
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-slate-900 hover:bg-slate-800 active:scale-[0.97] text-white cursor-pointer'
-              }`}
+              className="inline-flex items-center gap-2 h-11 px-5 rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 text-sm font-semibold transition-colors disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
             >
               <SignOut weight="bold" className="w-4 h-4" />
               <span>
-                {isCheckedOut
-                  ? t('checkedOutAt', { time: myRecordToday?.checkOut || '' })
-                  : t('checkOut')}
+                {isCheckedOut ? t('checkedOutAt', { time: myRecordToday?.checkOut || '' }) : t('checkOut')}
               </span>
             </button>
           </div>
@@ -190,277 +261,280 @@ export const AttendancePage: React.FC = () => {
           <div
             role="alert"
             aria-live="polite"
-            className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2 animate-fadeIn"
+            className="mt-4 p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800 flex items-center gap-2 animate-fadeIn"
           >
-            <WarningCircle weight="fill" className="w-4 h-4 text-rose-500 shrink-0" />
+            <WarningCircle weight="fill" className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
 
-        {/* Current Punch State Banner */}
         {myRecordToday && (
-          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-4 text-xs">
+          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-3 text-sm">
             <span className="font-semibold text-slate-700">{t('todaysStatus')}</span>
-            <span
-              className={`px-2.5 py-0.5 rounded-full font-bold ${
-                myRecordToday.status === 'PRESENT'
-                  ? 'bg-emerald-50 text-emerald-600'
-                  : myRecordToday.status === 'LATE'
-                  ? 'bg-amber-50 text-amber-600'
-                  : 'bg-rose-50 text-rose-600'
-              }`}
-            >
-              {tStatus(myRecordToday.status)}
-            </span>
+            <StatusChip tone={recordTone(myRecordToday.status)}>{tStatus(myRecordToday.status)}</StatusChip>
             {myRecordToday.lateMinutes > 0 && (
-              <span className="text-amber-600 font-medium flex items-center gap-1">
-                <WarningCircle weight="bold" className="w-3.5 h-3.5" />
-                {t('lateByMinutes', { mins: myRecordToday.lateMinutes })}
-              </span>
+              <span className="text-amber-800 font-medium">{t('lateByMinutes', { mins: myRecordToday.lateMinutes })}</span>
             )}
             {myRecordToday.otHours > 0 && (
-              <span className="text-blue-600 font-medium">
-                {t('overtimeHours', { hrs: myRecordToday.otHours })}
-              </span>
+              <span className="text-brand-700 font-medium">{t('overtimeHours', { hrs: myRecordToday.otHours })}</span>
             )}
           </div>
         )}
       </div>
 
-      {/* 2. Attendance Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {presentCount}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <UserCheck weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {canViewAll ? t('attPresentToday') : t('attMyDaysPresent')}
-            </h3>
-            <p className="text-[11px] text-emerald-600 mt-0.5 leading-tight font-medium">
-              {canViewAll ? t('attCheckedInWorkforce') : t('attPersonalOnTime')}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {lateCount}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <WarningCircle weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {canViewAll ? t('attLateArrivals') : t('attMyLateArrivals')}
-            </h3>
-            <p className="text-[11px] text-amber-600 mt-0.5 leading-tight font-medium">
-              {canViewAll ? t('attGraceExceeded') : t('attPastThreshold')}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {onLeaveCount}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-cyan-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <CalendarCheck weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {canViewAll ? t('attApprovedLeave') : t('attMyLeavesTaken')}
-            </h3>
-            <p className="text-[11px] text-cyan-600 mt-0.5 leading-tight font-medium">
-              {canViewAll ? t('attPlannedAbsence') : t('attExcusedTimeOff')}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {totalOtHours}h
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <ClockCountdown weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {canViewAll ? t('attOvertimeHours') : t('attMyOvertime')}
-            </h3>
-            <p className="text-[11px] text-purple-600 mt-0.5 leading-tight font-medium">
-              {canViewAll ? t('attLoggedExcess') : t('attEligibleOt')}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Attendance Daily Logs Table */}
-      <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <CalendarCheck weight="duotone" className="w-5 h-5 text-blue-600 shrink-0" />
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-                {canViewAll ? t('attDailyRecords') : t('attMyHistory')}
-              </h2>
-              <p className="text-[10px] text-slate-400">
-                {canViewAll
-                  ? t('attFullAuditLog')
-                  : t('attViewingRecordsFor', { name: currentUser.fullName })}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            {isManager && (
-              <button
-                type="button"
-                onClick={() => setIsQueueDrawerOpen(true)}
-                className="flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold active:scale-[0.98] transition-[transform,background-color] cursor-pointer"
+      {/* 2. Summary: selected day (HR/admin) or this month (employee) */}
+      {canViewAll ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              aria-label={t('atPrevDay')}
+              disabled={dayIndex < 0 || dayIndex >= availableDays.length - 1}
+              onClick={() => setSelectedDay(availableDays[dayIndex + 1])}
+              className={iconBtn}
+            >
+              <CaretLeft weight="bold" className="w-4 h-4" />
+            </button>
+            <label className="flex items-center">
+              <span className="sr-only">{t('atDayLabel')}</span>
+              <select
+                value={activeDay || ''}
+                onChange={(e) => setSelectedDay(e.target.value)}
+                disabled={availableDays.length === 0}
+                className="h-10 min-w-[200px] px-3 rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-900 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
               >
-                <ShieldCheck weight="bold" className="w-3.5 h-3.5 text-blue-400" />
-                <span>{t('correctionsQueue')}</span>
-                {pendingCorrections.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-mono">
-                    {pendingCorrections.length}
-                  </span>
-                )}
-              </button>
-            )}
-
-            {canRequestCorrection && (
-              <button
-                type="button"
-                onClick={() => {
-                  const target = displayedAttendance[0] || null;
-                  setTargetRecordForCorrection(target);
-                  setCorrectionError(null);
-                  setIsCorrectionModalOpen(true);
-                }}
-                disabled={displayedAttendance.length === 0}
-                className="flex items-center gap-1.5 min-h-[36px] px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none disabled:opacity-50 cursor-pointer"
-              >
-                <PencilSimple weight="bold" className="w-3.5 h-3.5" />
-                <span>{t('requestCorrection')}</span>
-              </button>
-            )}
+                {availableDays.map((d) => (
+                  <option key={d} value={d}>
+                    {dayFmt.format(parseDateKey(d))}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              aria-label={t('atNextDay')}
+              disabled={dayIndex <= 0}
+              onClick={() => setSelectedDay(availableDays[dayIndex - 1])}
+              className={iconBtn}
+            >
+              <CaretRight weight="bold" className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatTile label={t('atPresent')} value={countStatus(dayRecords, 'PRESENT')} sub={t('atPresentSub')} swatch="#0B7A62" />
+            <StatTile
+              label={t('dashLate')}
+              value={dayLate.length}
+              sub={dayLate.length ? t('atLateSub', { mins: avgLate }) : t('atLateNone')}
+              swatch="#C46A00"
+            />
+            <StatTile label={t('dashOnLeave')} value={countStatus(dayRecords, 'ON_LEAVE')} sub={t('atOnLeaveSub')} swatch="#6250D6" />
+            <StatTile label={t('dashAbsent')} value={countStatus(dayRecords, 'ABSENT')} sub={t('atAbsentSub')} swatch="#C2405A" />
           </div>
         </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatTile
+            label={t('atMonthPresent')}
+            value={countStatus(myMonthRecords, 'PRESENT') + countStatus(myMonthRecords, 'LATE')}
+            sub={monthName}
+            swatch="#0B7A62"
+          />
+          <StatTile label={t('atMonthLate')} value={countStatus(myMonthRecords, 'LATE')} sub={monthName} swatch="#C46A00" />
+          <StatTile label={t('atMonthLeave')} value={countStatus(myMonthRecords, 'ON_LEAVE')} sub={monthName} swatch="#6250D6" />
+          <StatTile
+            label={t('atMonthOt')}
+            value={t('atHoursShort', { hrs: myMonthRecords.reduce((s, a) => s + (a.otHours || 0), 0) })}
+            sub={monthName}
+            swatch="#46524C"
+          />
+        </div>
+      )}
 
-        {/* Toast */}
+      {/* 3. Log / corrections */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <FilterTabs
+            label={t('atTabsLabel')}
+            value={view}
+            onChange={setView}
+            className="flex-1 min-w-[260px]"
+            tabs={[
+              { value: 'log', label: canViewAll ? t('atTabLog') : t('atTabMyLog') },
+              { value: 'corrections', label: t('atTabCorrections'), count: pendingCorrections.length },
+            ]}
+          />
+          {canRequestCorrection && view === 'log' && (
+            <button
+              type="button"
+              onClick={() => openCorrection(tableRows[0] || null)}
+              disabled={tableRows.length === 0}
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 text-sm font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+            >
+              <PencilSimple weight="bold" className="w-4 h-4" />
+              {t('requestCorrection')}
+            </button>
+          )}
+        </div>
+
         {toastMessage && (
           <div
             role="status"
             aria-live="polite"
-            className="p-3 mx-6 mt-4 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center justify-between animate-fadeIn"
+            className="p-3 rounded-lg bg-brand-50 border border-brand-200 text-sm text-brand-800 flex items-center gap-2 animate-fadeIn"
           >
-            <div className="flex items-center gap-2">
-              <CheckCircle weight="fill" className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-              <span className="font-medium">{toastMessage}</span>
-            </div>
-            <span className="font-mono text-[10px] text-emerald-600">{t('auditSynchronized')}</span>
+            <CheckCircle weight="fill" className="w-4 h-4 shrink-0" />
+            <span className="font-medium">{toastMessage}</span>
           </div>
         )}
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                <th className="py-3 px-6">{t('colEmployee')}</th>
-                <th className="py-3 px-6">{t('colDate')}</th>
-                <th className="py-3 px-6">{t('colCheckIn')}</th>
-                <th className="py-3 px-6">{t('colCheckOut')}</th>
-                <th className="py-3 px-6">{t('colLateMinutes')}</th>
-                <th className="py-3 px-6">{t('colOtHours')}</th>
-                <th className="py-3 px-6">{t('colStatus')}</th>
-                {canRequestCorrection && <th className="py-3 px-6 text-right">{t('colAction')}</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {displayedAttendance.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-10 px-6 text-center text-slate-400">
-                    {t('noAttendanceRows')}
-                  </td>
+        {view === 'log' ? (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+            <table className="w-full min-w-[880px] text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-xs font-semibold text-slate-600 border-b border-slate-200">
+                  <th scope="col" className="py-3 px-5">{canViewAll ? t('colEmployee') : t('colDate')}</th>
+                  <th scope="col" className="py-3 px-5 text-right">{t('colCheckIn')}</th>
+                  <th scope="col" className="py-3 px-5 text-right">{t('colCheckOut')}</th>
+                  <th scope="col" className="py-3 px-5 text-right">{t('atColWorked')}</th>
+                  <th scope="col" className="py-3 px-5 text-right">{t('dashLate')}</th>
+                  <th scope="col" className="py-3 px-5 text-right">{t('atMonthOt')}</th>
+                  <th scope="col" className="py-3 px-5">{t('colStatus')}</th>
+                  {canRequestCorrection && (
+                    <th scope="col" className="py-3 px-5 text-right">
+                      <span className="sr-only">{t('colAction')}</span>
+                    </th>
+                  )}
                 </tr>
-              ) : (
-                displayedAttendance.map((rec) => (
-                  <tr key={rec.attendanceId} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3.5 px-6 font-semibold text-slate-900">
-                      {rec.employeeName}
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm text-slate-700 tabular-nums">
+                {tableRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-10 px-5 text-center text-slate-500">
+                      {t('noAttendanceRows')}
                     </td>
-                    <td className="py-3.5 px-6 font-mono text-slate-500 text-[11px] tabular-nums">
-                      {rec.attendanceDate}
-                    </td>
-                    <td className="py-3.5 px-6 font-mono font-medium text-slate-800 tabular-nums">
-                      {rec.checkIn || '—'}
-                    </td>
-                    <td className="py-3.5 px-6 font-mono font-medium text-slate-800 tabular-nums">
-                      {rec.checkOut || '—'}
-                    </td>
-                    <td className="py-3.5 px-6">
-                      {rec.lateMinutes > 0 ? (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 font-bold border border-amber-200/60">
-                          +{rec.lateMinutes} {t('minsUnit')}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">{t('onTimeText')}</span>
-                      )}
-                    </td>
-                    <td className="py-3.5 px-6 font-mono tabular-nums">
-                      {rec.otHours > 0 ? `${rec.otHours} ${t('hrsUnit')}` : '0'}
-                    </td>
-                    <td className="py-3.5 px-6">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${
-                          rec.status === 'PRESENT'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
-                            : rec.status === 'LATE'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
-                            : rec.status === 'ON_LEAVE'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200/60'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200/60'
-                        }`}
-                      >
-                        {tStatus(rec.status)}
-                      </span>
-                    </td>
-                    {canRequestCorrection && (
-                      <td className="py-3.5 px-6 text-right">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTargetRecordForCorrection(rec);
-                            setReqCheckIn(rec.checkIn || '08:00');
-                            setReqCheckOut(rec.checkOut || '17:00');
-                            setReqReason('');
-                            setCorrectionError(null);
-                            setIsCorrectionModalOpen(true);
-                          }}
-                          className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 underline active:scale-[0.98] cursor-pointer"
-                        >
-                          {t('disputeBtn')}
-                        </button>
-                      </td>
-                    )}
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ) : (
+                  tableRows.map((rec) => {
+                    const isToday = rec.attendanceDate === todayStr;
+                    return (
+                      <tr key={rec.attendanceId}>
+                        <td className="py-3.5 px-5">
+                          {canViewAll ? (
+                            <div className="flex items-center gap-3">
+                              <InitialsAvatar name={rec.employeeName} size="sm" employeeId={rec.employeeId} />
+                              <span className="font-semibold text-slate-900">{rec.employeeName}</span>
+                            </div>
+                          ) : (
+                            <span className="font-semibold text-slate-900 whitespace-nowrap">
+                              {shortFmt.format(parseDateKey(rec.attendanceDate))}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-5 text-right text-slate-900">{rec.checkIn || dash}</td>
+                        <td className="py-3.5 px-5 text-right text-slate-900">
+                          {rec.checkOut || (rec.checkIn && isToday ? <span className="text-slate-500">{t('atStillIn')}</span> : dash)}
+                        </td>
+                        <td className="py-3.5 px-5 text-right">{worked(rec) || dash}</td>
+                        <td className="py-3.5 px-5 text-right">
+                          {rec.lateMinutes > 0 ? (
+                            <span className="font-semibold text-amber-800">{t('atMinutesShort', { mins: rec.lateMinutes })}</span>
+                          ) : (
+                            dash
+                          )}
+                        </td>
+                        <td className="py-3.5 px-5 text-right">
+                          {rec.otHours > 0 ? t('atHoursShort', { hrs: rec.otHours }) : dash}
+                        </td>
+                        <td className="py-3.5 px-5">
+                          <StatusChip tone={recordTone(rec.status)}>{tStatus(rec.status)}</StatusChip>
+                        </td>
+                        {canRequestCorrection && (
+                          <td className="py-3.5 px-5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => openCorrection(rec)}
+                              aria-label={`${t('atRequestFix')} — ${rec.employeeName}, ${rec.attendanceDate}`}
+                              className={`${smallBtn} text-brand-700 hover:bg-brand-50`}
+                            >
+                              <PencilSimple weight="bold" className="w-3.5 h-3.5" />
+                              {t('atRequestFix')}
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <DashboardCard title={t('atTabCorrections')} subtitle={t('atCorrSub')}>
+            {sortedCorrections.length === 0 ? (
+              <EmptyState>{t('noCorrectionRequests')}</EmptyState>
+            ) : (
+              <ul className="flex flex-col -mt-1">
+                {sortedCorrections.map((corr) => {
+                  const busy = busyCorrectionId === corr.correctionId;
+                  return (
+                    <li
+                      key={corr.correctionId}
+                      className="flex flex-wrap items-center gap-3 py-3.5 border-t border-slate-100 first:border-0"
+                    >
+                      <InitialsAvatar name={corr.employeeName} employeeId={corr.employeeId} />
+                      <div className="flex-1 min-w-[240px]">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {corr.employeeName}{' '}
+                          <span className="font-medium text-slate-500">
+                            · {corr.attendanceDate ? shortFmt.format(parseDateKey(corr.attendanceDate)) : ''}
+                          </span>
+                        </div>
+                        <div className="text-[13px] text-slate-700 mt-0.5 tabular-nums">
+                          {t('atCorrCheckIn', {
+                            from: (corr.originalCheckIn || '—').substring(0, 5),
+                            to: (corr.requestedCheckIn || '—').substring(0, 5),
+                          })}
+                          {' · '}
+                          {t('atCorrCheckOut', {
+                            from: (corr.originalCheckOut || '—').substring(0, 5),
+                            to: (corr.requestedCheckOut || '—').substring(0, 5),
+                          })}
+                        </div>
+                        {corr.reason && <div className="text-[13px] text-slate-500 mt-0.5">“{corr.reason}”</div>}
+                      </div>
+                      {corr.status === 'PENDING' && canReviewCorrections ? (
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => reviewCorrection(corr.correctionId, 'REJECTED')}
+                            aria-label={t('atRejectAria', { name: corr.employeeName })}
+                            className={`${smallBtn} border border-slate-200 bg-white text-slate-800 hover:bg-slate-50`}
+                          >
+                            {t('notifReject')}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => reviewCorrection(corr.correctionId, 'APPROVED')}
+                            aria-label={t('atApproveAria', { name: corr.employeeName })}
+                            className={`${smallBtn} bg-brand-600 text-white hover:bg-brand-700`}
+                          >
+                            {busy && <CircleNotch weight="bold" className="w-3.5 h-3.5 animate-spin" />}
+                            {t('dashApprove')}
+                          </button>
+                        </div>
+                      ) : (
+                        <StatusChip tone={correctionTone(corr.status)}>{tStatus(corr.status)}</StatusChip>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </DashboardCard>
+        )}
       </div>
 
       {/* MODAL: Request Punch Correction */}
@@ -516,7 +590,7 @@ export const AttendancePage: React.FC = () => {
             <div className="font-semibold text-slate-800">
               {targetRecordForCorrection?.employeeName} • {targetRecordForCorrection?.attendanceDate}
             </div>
-            <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
+            <div className="text-xs text-slate-500 mt-0.5 font-mono">
               {t('currentPunchPrefix', {
                 inTime: targetRecordForCorrection?.checkIn || '—',
                 outTime: targetRecordForCorrection?.checkOut || '—',
@@ -526,7 +600,7 @@ export const AttendancePage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="corrCheckIn" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="corrCheckIn" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('correctedCheckInLabel')}
               </label>
               <input
@@ -535,11 +609,11 @@ export const AttendancePage: React.FC = () => {
                 value={reqCheckIn}
                 onChange={(e) => setReqCheckIn(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500"
+                className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500"
               />
             </div>
             <div>
-              <label htmlFor="corrCheckOut" className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="corrCheckOut" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('correctedCheckOutLabel')}
               </label>
               <input
@@ -548,13 +622,13 @@ export const AttendancePage: React.FC = () => {
                 value={reqCheckOut}
                 onChange={(e) => setReqCheckOut(e.target.value)}
                 required
-                className="w-full px-3 py-2 text-sm sm:text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500"
+                className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500"
               />
             </div>
           </div>
 
           <div>
-            <label htmlFor="corrReason" className="block text-xs font-semibold text-slate-700 mb-1">
+            <label htmlFor="corrReason" className="block text-sm font-semibold text-slate-800 mb-1.5">
               {t('reasonAdjustmentLabel')}
             </label>
             <textarea
@@ -563,7 +637,7 @@ export const AttendancePage: React.FC = () => {
               onChange={(e) => setReqReason(e.target.value)}
               rows={2}
               required
-              className="w-full px-3 py-2 text-sm sm:text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500"
+              className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500"
             />
           </div>
 
@@ -578,7 +652,7 @@ export const AttendancePage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmittingCorrection}
-              className="inline-flex items-center gap-2 min-h-[38px] px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold active:scale-[0.98] transition-[transform,background-color] disabled:opacity-60 cursor-pointer"
+              className="inline-flex items-center gap-2 h-10 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors disabled:opacity-60 cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none"
             >
               {isSubmittingCorrection ? (
                 <>
@@ -593,89 +667,6 @@ export const AttendancePage: React.FC = () => {
         </form>
       </Modal>
 
-      {/* DRAWER: Manager Corrections Review Queue */}
-      <Drawer
-        isOpen={isQueueDrawerOpen}
-        onClose={() => setIsQueueDrawerOpen(false)}
-        title={t('drawerQueueTitle')}
-        subtitle={t('drawerQueueSub')}
-        width="md"
-      >
-        <div className="space-y-4">
-          <div className="space-y-3 max-h-[65vh] overflow-y-auto">
-            {attendanceCorrections.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-400">
-                {t('noCorrectionRequests')}
-              </div>
-            ) : (
-              attendanceCorrections.map((corr) => (
-                <div
-                  key={corr.correctionId}
-                  className="p-4 rounded-xl bg-slate-50/70 border border-slate-200/80 space-y-2.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-xs text-slate-900">
-                      {corr.employeeName}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        corr.status === 'APPROVED'
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : corr.status === 'REJECTED'
-                          ? 'bg-rose-50 text-rose-700'
-                          : 'bg-amber-50 text-amber-700'
-                      }`}
-                    >
-                      {tStatus(corr.status)}
-                    </span>
-                  </div>
-
-                  <div className="text-[11px] text-slate-500 font-mono">
-                    {t('requestedInOut', {
-                      date: corr.attendanceDate,
-                      inTime: corr.requestedCheckIn,
-                      outTime: corr.requestedCheckOut,
-                    })}
-                  </div>
-
-                  <p className="text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-100 italic">
-                    "{corr.reason}"
-                  </p>
-
-                  {corr.status === 'PENDING' && isManager && (
-                    <div className="pt-2 flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => reviewAttendanceCorrection(corr.correctionId, 'REJECTED')}
-                        className="px-3 py-1 rounded-lg text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 cursor-pointer"
-                      >
-                        {t('notifReject')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => reviewAttendanceCorrection(corr.correctionId, 'APPROVED')}
-                        className="px-3 py-1 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-xs active:scale-[0.98] cursor-pointer"
-                      >
-                        {t('approveAndOverwrite')}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="pt-4 border-t border-slate-100 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setIsQueueDrawerOpen(false)}
-              className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 cursor-pointer"
-            >
-              {t('closeQueue')}
-            </button>
-          </div>
-        </div>
-      </Drawer>
     </div>
   );
 };

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  ChartBar,
   DownloadSimple,
   Users,
   CalendarCheck,
@@ -12,8 +11,16 @@ import {
 import { useHrmsStore } from '../store/useHrmsStore';
 import { LeaveSummaryChart } from '../components/dashboard/LeaveSummaryChart';
 import { AttendanceSummaryChart } from '../components/dashboard/AttendanceSummaryChart';
+import { MetricCard } from '../components/dashboard/MetricCard';
+import { DashboardCard } from '../components/dashboard/DashboardCard';
+import { FilteredReports } from '../components/reports/FilteredReports';
 import { hasPermission } from '../utils/rbac';
 import { useI18n } from '../i18n/useI18n';
+
+const isActiveStatus = (status?: string) => {
+  const s = (status || '').toUpperCase().replace(/\s+/g, '_');
+  return s !== 'TERMINATED' && s !== 'INACTIVE';
+};
 
 export const ReportsPage: React.FC = () => {
   const { employees, departments, payroll, attendance, currentUser, setActiveTab } = useHrmsStore();
@@ -23,63 +30,63 @@ export const ReportsPage: React.FC = () => {
 
   if (!hasAccess) {
     return (
-      <div className="max-w-2xl mx-auto my-12 bg-white/90 backdrop-blur-md rounded-2xl p-8 border border-white/80 shadow-[0_4px_25px_rgba(0,0,0,0.04)] text-center space-y-6 animate-fadeIn">
-        <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200/60 mx-auto flex items-center justify-center shadow-sm">
-          <LockKey weight="duotone" className="w-8 h-8" />
+      <div className="max-w-2xl mx-auto my-12 bg-white rounded-xl p-8 border border-slate-200 text-center space-y-6 animate-fadeIn">
+        <div className="w-14 h-14 rounded-xl bg-amber-50 text-amber-800 mx-auto flex items-center justify-center">
+          <LockKey weight="duotone" className="w-7 h-7" />
         </div>
 
         <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-mono font-semibold mb-3">
-            <ShieldCheck weight="bold" className="w-3.5 h-3.5 text-blue-600" />
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold mb-3">
+            <ShieldCheck weight="bold" className="w-3.5 h-3.5 text-brand-700" />
             <span>{t('rbacTier1')}</span>
           </div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight">
-            {t('execClearanceTitle')}
-          </h2>
-          <p className="text-xs text-slate-500 max-w-md mx-auto mt-2 leading-relaxed">
-            {t('execClearanceDesc')}
-          </p>
+          <h2 className="text-xl font-semibold text-slate-900 tracking-tight">{t('execClearanceTitle')}</h2>
+          <p className="text-sm text-slate-500 max-w-md mx-auto mt-2 leading-relaxed">{t('execClearanceDesc')}</p>
         </div>
 
-        <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 text-left max-w-lg mx-auto text-xs space-y-2">
-          <div className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center justify-between">
+        <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-left max-w-lg mx-auto text-[13px] space-y-2">
+          <div className="font-semibold text-slate-700 flex flex-wrap items-center justify-between gap-2">
             <span>{t('gatewaySecurityPolicy')}</span>
-            <span className="font-mono text-[10px] text-rose-600 font-bold">HTTP 403 FORBIDDEN</span>
+            <span className="font-mono text-xs text-rose-700 font-bold">HTTP 403 FORBIDDEN</span>
           </div>
-          <div className="text-slate-600 text-[11px] font-mono space-y-1">
+          <div className="text-slate-600 font-mono text-xs space-y-1">
             <div>
-              <span className="text-slate-400">Target:</span> GET /api/report/dashboard
+              <span className="text-slate-500">Target:</span> GET /api/report/dashboard
             </div>
             <div>
-              <span className="text-slate-400">Required:</span> hasAnyRole('ADMIN', 'HR_MANAGER')
+              <span className="text-slate-500">Required:</span> hasAnyRole('ADMIN', 'HR_MANAGER')
             </div>
             <div>
-              <span className="text-slate-400">{t('accountLabel')}:</span> {currentUser.fullName} (
-              {currentUser.userName})
+              <span className="text-slate-500">{t('accountLabel')}:</span> {currentUser.fullName} ({currentUser.userName})
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('dashboard')}
-            className="flex items-center gap-2 min-h-[40px] px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
-          >
-            <House weight="bold" className="w-4 h-4" />
-            <span>{t('returnToDashboard')}</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setActiveTab('dashboard')}
+          className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none"
+        >
+          <House weight="bold" className="w-4 h-4" />
+          {t('returnToDashboard')}
+        </button>
       </div>
     );
   }
 
+  const activeEmployees = employees.filter((e) => isActiveStatus(e.status));
   const totalPayroll = payroll.reduce((acc, p) => acc + p.netSalary, 0);
-  const attendedCount = attendance.filter(
-    (a) => a.status === 'PRESENT' || a.status === 'LATE'
-  ).length;
-  const attendanceRate =
-    attendance.length > 0 ? Math.round((attendedCount / attendance.length) * 1000) / 10 : 0;
+  const attendedCount = attendance.filter((a) => a.status === 'PRESENT' || a.status === 'LATE').length;
+  const attendanceRate = attendance.length > 0 ? Math.round((attendedCount / attendance.length) * 1000) / 10 : 0;
+  const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+
+  const deptRows = departments
+    .map((d) => {
+      const count = employees.filter((e) => e.departmentId === d.departmentId).length;
+      return { ...d, count, share: Math.round((count / (employees.length || 1)) * 100) };
+    })
+    .sort((a, b) => b.count - a.count);
+  const maxShare = Math.max(1, ...deptRows.map((d) => d.share));
 
   const handleExportCsv = () => {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -110,91 +117,45 @@ export const ReportsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. Header with Export Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
-        <div>
-          <div className="flex items-center gap-2">
-            <ChartBar weight="duotone" className="w-5 h-5 text-blue-600" />
-            <h2 className="text-base font-bold text-slate-900 tracking-tight">
-              {t('execAnalyticsTitle')}
-            </h2>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">{t('execAnalyticsSub')}</p>
-        </div>
-
+      {/* 1. Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-slate-500">{t('execAnalyticsSub')}</p>
         <button
           type="button"
           onClick={handleExportCsv}
-          className="flex items-center gap-2 min-h-[40px] px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-[0.97] text-white text-xs font-semibold shadow-sm transition-[transform,background-color] cursor-pointer shrink-0"
+          className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 text-sm font-semibold transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
         >
           <DownloadSimple weight="bold" className="w-4 h-4" />
-          <span>{t('exportWorkforceCsv')}</span>
+          {t('exportWorkforceCsv')}
         </button>
       </div>
 
-      {/* 2. Key Intelligence Metrics */}
+      {/* 2. Key metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {employees.length}{' '}
-              <span className="text-sm font-normal text-slate-400">{t('staffUnit')}</span>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <Users weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {t('totalActiveHeadcount')}
-            </h3>
-            <p className="text-[11px] text-emerald-600 mt-0.5 leading-tight font-medium">
-              {t('acrossDepts', { count: departments.length })}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {attendanceRate}%
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <CalendarCheck weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {t('avgAttendanceRate')}
-            </h3>
-            <p className="text-[11px] text-emerald-600 mt-0.5 leading-tight font-medium">
-              {t('fromLastQuarter')}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[120px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              ${totalPayroll.toLocaleString()}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <CurrencyCircleDollar weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {t('totalMonthlyPayout')}
-            </h3>
-            <p className="text-[11px] text-blue-600 mt-0.5 leading-tight font-medium">
-              {t('calculatedNetPayroll')}
-            </p>
-          </div>
-        </div>
+        <MetricCard
+          title={t('totalActiveHeadcount')}
+          icon={Users}
+          value={activeEmployees.length}
+          suffix={t('staffUnit')}
+          subtitle={t('acrossDepts', { count: departments.length })}
+        />
+        <MetricCard
+          title={t('avgAttendanceRate')}
+          icon={CalendarCheck}
+          value={`${attendanceRate}%`}
+          meter={attendance.length > 0 ? attendanceRate : undefined}
+          subtitle={t('fromLastQuarter')}
+        />
+        <MetricCard
+          title={t('totalMonthlyPayout')}
+          icon={CurrencyCircleDollar}
+          value={money.format(totalPayroll)}
+          subtitle={t('calculatedNetPayroll')}
+        />
       </div>
 
-      {/* 3. Visual Charts Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* 3. Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="min-h-[290px]">
           <LeaveSummaryChart />
         </div>
@@ -203,48 +164,51 @@ export const ReportsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. Department Staffing Table */}
-      <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-900 tracking-tight">
-            {t('deptHeadcountAllocation')}
-          </h3>
-          <span className="text-xs text-slate-400">
-            {t('departmentCountLabel', { count: departments.length })}
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+      {/* 4. Department staffing */}
+      <DashboardCard
+        title={t('deptHeadcountAllocation')}
+        subtitle={t('departmentCountLabel', { count: departments.length })}
+      >
+        <div className="overflow-x-auto -mx-5">
+          <table className="w-full min-w-[640px] text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                <th className="py-3 px-6">{t('colDeptName')}</th>
-                <th className="py-3 px-6">{t('colFunctionDesc')}</th>
-                <th className="py-3 px-6">{t('colHeadcount')}</th>
-                <th className="py-3 px-6 text-right">{t('colWorkforceShare')}</th>
+              <tr className="bg-slate-50 text-xs font-semibold text-slate-600 border-y border-slate-200">
+                <th scope="col" className="py-3 px-5">{t('colDeptName')}</th>
+                <th scope="col" className="py-3 px-5">{t('colFunctionDesc')}</th>
+                <th scope="col" className="py-3 px-5 text-right">{t('colHeadcount')}</th>
+                <th scope="col" className="py-3 px-5 w-[30%]">{t('colWorkforceShare')}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {departments.map((d) => {
-                const count = employees.filter((e) => e.departmentId === d.departmentId).length;
-                const share = Math.round((count / (employees.length || 1)) * 100);
-                return (
-                  <tr key={d.departmentId} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="py-3.5 px-6 font-semibold text-slate-900">{d.departmentName}</td>
-                    <td className="py-3.5 px-6 text-slate-500">{d.description}</td>
-                    <td className="py-3.5 px-6 font-mono font-medium tabular-nums">
-                      {count} {t('membersUnit')}
-                    </td>
-                    <td className="py-3.5 px-6 text-right font-mono font-semibold text-blue-600 tabular-nums">
-                      {share}%
-                    </td>
-                  </tr>
-                );
-              })}
+            <tbody className="divide-y divide-slate-100 text-sm text-slate-700 tabular-nums">
+              {deptRows.map((d) => (
+                <tr key={d.departmentId}>
+                  <td className="py-3.5 px-5 font-semibold text-slate-900">{d.departmentName}</td>
+                  <td className="py-3.5 px-5 text-slate-500 max-w-[280px] truncate" title={d.description}>
+                    {d.description || '—'}
+                  </td>
+                  <td className="py-3.5 px-5 text-right">
+                    {d.count} {t('membersUnit')}
+                  </td>
+                  <td className="py-3.5 px-5">
+                    <div className="flex items-center gap-3" title={`${d.departmentName}: ${d.share}%`}>
+                      <div className="flex-1 h-2.5" aria-hidden="true">
+                        <div
+                          className="h-2.5 bg-brand-600 rounded-r"
+                          style={{ width: `${Math.max(d.share > 0 ? 2 : 0, Math.round((d.share / maxShare) * 100))}%` }}
+                        />
+                      </div>
+                      <span className="w-10 text-right font-semibold text-slate-900">{d.share}%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
-      </div>
+      </DashboardCard>
+
+      {/* 5. Filtered reports (report service) */}
+      <FilteredReports />
     </div>
   );
 };

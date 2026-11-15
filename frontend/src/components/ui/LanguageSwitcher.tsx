@@ -29,7 +29,7 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         isDark
           ? 'bg-slate-800/80 border-slate-700/80'
           : variant === 'login'
-          ? 'bg-slate-100/90 border-slate-200/80 shadow-2xs'
+          ? 'bg-slate-100/90 border-slate-200 shadow-2xs'
           : 'h-10 bg-white border-slate-200 shadow-2xs',
         className
       )}
@@ -41,12 +41,12 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         aria-pressed={language === 'en'}
         title="English"
         className={cn(
-          'relative flex items-center justify-center rounded-lg transition-[transform,background-color,box-shadow,opacity] duration-150 active:scale-[0.94] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer',
+          'relative flex items-center justify-center rounded-lg transition-[transform,background-color,box-shadow,opacity] duration-150 active:scale-[0.94] focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer',
           variant === 'header' ? 'w-8 h-8' : 'w-8 h-7',
           language === 'en'
             ? isDark
-              ? 'bg-slate-700 shadow-sm ring-1 ring-blue-400/50'
-              : 'bg-blue-50/90 shadow-xs ring-1 ring-blue-500/30'
+              ? 'bg-slate-700 shadow-sm ring-1 ring-brand-400/50'
+              : 'bg-brand-50/90 shadow-xs ring-1 ring-brand-500/30'
             : isDark
             ? 'opacity-55 hover:opacity-90 hover:bg-slate-700/40'
             : 'opacity-55 hover:opacity-100 hover:bg-slate-100'
@@ -68,12 +68,12 @@ export const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({
         aria-pressed={language === 'kh'}
         title="ភាសាខ្មែរ"
         className={cn(
-          'relative flex items-center justify-center rounded-lg transition-[transform,background-color,box-shadow,opacity] duration-150 active:scale-[0.94] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer',
+          'relative flex items-center justify-center rounded-lg transition-[transform,background-color,box-shadow,opacity] duration-150 active:scale-[0.94] focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer',
           variant === 'header' ? 'w-8 h-8' : 'w-8 h-7',
           language === 'kh'
             ? isDark
-              ? 'bg-slate-700 shadow-sm ring-1 ring-blue-400/50'
-              : 'bg-blue-50/90 shadow-xs ring-1 ring-blue-500/30'
+              ? 'bg-slate-700 shadow-sm ring-1 ring-brand-400/50'
+              : 'bg-brand-50/90 shadow-xs ring-1 ring-brand-500/30'
             : isDark
             ? 'opacity-55 hover:opacity-90 hover:bg-slate-700/40'
             : 'opacity-55 hover:opacity-100 hover:bg-slate-100'

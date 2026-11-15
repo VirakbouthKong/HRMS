@@ -15,6 +15,8 @@ public record PayrollRecordResponse(
         BigDecimal lateDeduction,
         int unpaidLeaveDays,
         BigDecimal unpaidLeaveDeduction,
-        BigDecimal netSalary
+        BigDecimal netSalary,
+        String status,
+        LocalDate paidDate
 ) {
 }

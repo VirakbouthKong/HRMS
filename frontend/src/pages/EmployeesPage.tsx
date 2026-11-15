@@ -13,14 +13,19 @@ import {
   ShieldCheck,
   CircleNotch,
   WarningCircle,
+  ClockCounterClockwise,
 } from '@phosphor-icons/react';
-import { useHrmsStore } from '../store/useHrmsStore';
+import { useHrmsStore, normalizeEmployee } from '../store/useHrmsStore';
 import { Employee } from '../types';
 import { BehavioralHistorySelect } from '../components/ui/behavioral-history-select';
 import { Modal } from '../components/ui/modal';
 import { hasPermission } from '../utils/rbac';
 import { useI18n } from '../i18n/useI18n';
-import { payrollApi } from '../api';
+import { payrollApi, employeeApi, JobHistoryItem } from '../api';
+import { MetricCard } from '../components/dashboard/MetricCard';
+import { InitialsAvatar, StatusChip, localeFor, parseDateKey, toDateKey } from '../components/dashboard/DashboardCard';
+import { FilterTabs } from '../components/ui/filter-tabs';
+import { JobHistoryTimeline } from '../components/employees/JobHistoryTimeline';
 
 export const EmployeesPage: React.FC = () => {
   const {
@@ -33,10 +38,15 @@ export const EmployeesPage: React.FC = () => {
     currentUser,
     searchQuery,
   } = useHrmsStore();
-  const { t, tStatus } = useI18n();
+  const { t, tStatus, language } = useI18n();
 
   const [searchTerm, setSearchTerm] = useState(searchQuery);
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
+  const [statusTab, setStatusTab] = useState<'ACTIVE' | 'ON_LEAVE' | 'FORMER' | 'ALL'>('ACTIVE');
+  const [historyFor, setHistoryFor] = useState<Employee | null>(null);
+  const [history, setHistory] = useState<JobHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editFormError, setEditFormError] = useState<string | null>(null);
@@ -107,9 +117,32 @@ export const EmployeesPage: React.FC = () => {
     return matchesSearch && matchesDept;
   });
 
-  const activeCount = employees.filter(
-    (e) => e.status?.toUpperCase() === 'ACTIVE' || e.status === 'Active'
-  ).length;
+  // Status groups for the tabs: probation counts as active; terminated/inactive are "former".
+  const statusGroup = (status?: string): 'ACTIVE' | 'ON_LEAVE' | 'FORMER' => {
+    const norm = (status || '').toUpperCase().replace(/\s+/g, '_');
+    if (norm === 'ON_LEAVE') return 'ON_LEAVE';
+    if (norm === 'TERMINATED' || norm === 'INACTIVE') return 'FORMER';
+    return 'ACTIVE';
+  };
+  const groupCount = (g: 'ACTIVE' | 'ON_LEAVE' | 'FORMER') =>
+    filteredEmployees.filter((e) => statusGroup(e.status) === g).length;
+  const tabEmployees =
+    statusTab === 'ALL' ? filteredEmployees : filteredEmployees.filter((e) => statusGroup(e.status) === statusTab);
+  const activeCount = employees.filter((e) => statusGroup(e.status) === 'ACTIVE').length;
+
+  const dateFmt = new Intl.DateTimeFormat(localeFor(language), { day: 'numeric', month: 'short', year: 'numeric' });
+  const fmtDate = (key?: string) => (key && /^\d{4}-\d{2}-\d{2}/.test(key) ? dateFmt.format(parseDateKey(key)) : key || '—');
+  const soon = new Date();
+  soon.setDate(soon.getDate() + 30);
+  const contractEndingSoon = (e: Employee) =>
+    !!e.contractEndDate &&
+    statusGroup(e.status) !== 'FORMER' &&
+    e.contractEndDate.substring(0, 10) >= toDateKey(new Date()) &&
+    e.contractEndDate.substring(0, 10) <= toDateKey(soon);
+  const statusTone = (status?: string) => {
+    const g = statusGroup(status);
+    return g === 'ACTIVE' ? 'ok' : g === 'ON_LEAVE' ? 'info' : 'neutral';
+  };
   const avgSalary = Math.round(
     employees.reduce((sum, e) => sum + (e.salary || 0), 0) / (employees.length || 1)
   );
@@ -124,7 +157,7 @@ export const EmployeesPage: React.FC = () => {
       phoneNumber: '',
       gender: 'Male',
       dob: '1995-01-01',
-      salary: defaultJob?.minSalary || 2000,
+      salary: 2000,
       departmentId: defaultDeptId,
       jobTitle: defaultJob?.jobTitle || '',
       jobId: defaultJob?.jobId || 1,
@@ -172,16 +205,14 @@ export const EmployeesPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleOpenEdit = (emp: Employee) => {
-    setEditingEmployee(emp);
-    setEditFormError(null);
+  const toEditForm = (emp: Employee): typeof editFormData => {
     const deptJobs = jobs.filter((j) => j.departmentId === emp.departmentId);
     const matchedJob =
       deptJobs.find(
         (j) => j.jobTitle.trim().toLowerCase() === (emp.jobTitle || '').trim().toLowerCase()
       ) || deptJobs[0];
     const upperStatus = (emp.status || '').toUpperCase().replace(/\s+/g, '_');
-    setEditFormData({
+    return {
       firstName: emp.firstName,
       lastName: emp.lastName,
       email: emp.email,
@@ -191,7 +222,7 @@ export const EmployeesPage: React.FC = () => {
       departmentId: emp.departmentId,
       jobTitle: matchedJob?.jobTitle || emp.jobTitle,
       jobId: matchedJob?.jobId || jobs[0]?.jobId || 1,
-      salary: emp.salary || matchedJob?.minSalary || 0,
+      salary: emp.salary || 0,
       status:
         upperStatus === 'ON_LEAVE'
           ? 'On Leave'
@@ -200,8 +231,26 @@ export const EmployeesPage: React.FC = () => {
           : upperStatus === 'PROBATION'
           ? 'Probation'
           : 'Active',
-    });
+    };
+  };
+
+  const handleOpenEdit = (emp: Employee) => {
+    setEditingEmployee(emp);
+    setEditFormError(null);
+    setEditFormData(toEditForm(emp));
     setIsEditModalOpen(true);
+
+    // Swap in the latest record (GET /api/employees/{id}); keep the salary already shown,
+    // which may come from the payroll profile below.
+    employeeApi
+      .getById(emp.employeeId)
+      .then((raw) => {
+        if (!raw) return;
+        const fresh = { ...emp, ...normalizeEmployee(raw) };
+        setEditingEmployee(fresh);
+        setEditFormData((prev) => ({ ...toEditForm(fresh), salary: prev.salary }));
+      })
+      .catch(() => {});
 
     if (canViewSalary) {
       payrollApi
@@ -275,114 +324,53 @@ export const EmployeesPage: React.FC = () => {
   const canEdit = hasPermission(currentUser.role, 'EMPLOYEE_EDIT');
   const canViewSalary = hasPermission(currentUser.role, 'EMPLOYEE_VIEW_SALARY');
   const canDelete = hasPermission(currentUser.role, 'EMPLOYEE_DELETE');
+  // Job history is HR/admin only (backend: ADMIN, HR_MANAGER, HR_STAFF); employees never see it.
+  const canViewHistory = hasPermission(currentUser.role, 'EMPLOYEE_JOB_HISTORY');
+  const showActions = canEdit || canDelete || canViewHistory;
 
-  const getStatusBadgeClasses = (status: string) => {
-    const norm = (status || '').toUpperCase().replace(/\s+/g, '_');
-    if (norm === 'ACTIVE') return 'bg-emerald-50 text-emerald-700 border border-emerald-200/60';
-    if (norm === 'ON_LEAVE' || norm === 'PROBATION')
-      return 'bg-amber-50 text-amber-700 border border-amber-200/60';
-    return 'bg-rose-50 text-rose-700 border border-rose-200/60';
+  const openHistory = async (emp: Employee) => {
+    setHistoryFor(emp);
+    setHistory([]);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    try {
+      const items = await employeeApi.getJobHistory(emp.employeeId);
+      setHistory(Array.isArray(items) ? items : []);
+    } catch (err: any) {
+      setHistoryError(err?.response?.status === 403 ? t('jhNoPermission') : t('jhLoadFailed'));
+    } finally {
+      setHistoryLoading(false);
+    }
   };
+
 
   return (
     <div className="space-y-6 pb-12">
-      {/* 1. Metric Cards Row */}
+      {/* 1. Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {employees.length}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <UsersThree weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {t('empMetricTotal')}
-            </h3>
-            <p className="text-[11px] text-slate-400 mt-0.5 leading-tight truncate">
-              {t('empMetricTotalSub')}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {departments.length}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <TreeStructure weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {t('empMetricDepts')}
-            </h3>
-            <p className="text-[11px] text-slate-400 mt-0.5 leading-tight truncate">
-              {t('empMetricDeptsSub')}
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-          <div className="flex items-start justify-between">
-            <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-              {activeCount}
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-              <CheckCircle weight="fill" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-              {t('empMetricActive')}
-            </h3>
-            <p className="text-[11px] text-emerald-600 mt-0.5 leading-tight font-medium">
-              {t('empMetricActiveSub')}
-            </p>
-          </div>
-        </div>
-
+        <MetricCard title={t('empMetricTotal')} icon={UsersThree} value={employees.length} subtitle={t('empMetricTotalSub')} />
+        <MetricCard title={t('empMetricDepts')} icon={TreeStructure} value={departments.length} subtitle={t('empMetricDeptsSub')} />
+        <MetricCard
+          title={t('empMetricActive')}
+          icon={CheckCircle}
+          accent="brand"
+          value={activeCount}
+          subtitle={t('empMetricActiveSub')}
+        />
         {canViewSalary ? (
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-            <div className="flex items-start justify-between">
-              <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-sans tabular-nums leading-none">
-                ${avgSalary.toLocaleString()}
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                <CurrencyDollar weight="fill" className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <h3 className="text-xs font-bold text-slate-800 tracking-tight leading-snug">
-                {t('empMetricAvgSalary')}
-              </h3>
-              <p className="text-[11px] text-amber-600 mt-0.5 leading-tight font-medium">
-                {t('empMetricAvgSalarySub')}
-              </p>
-            </div>
-          </div>
+          <MetricCard
+            title={t('empMetricAvgSalary')}
+            icon={CurrencyDollar}
+            value={`$${avgSalary.toLocaleString()}`}
+            subtitle={t('empMetricAvgSalarySub')}
+          />
         ) : (
-          <div className="bg-white/90 backdrop-blur-md rounded-2xl p-5 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-shadow duration-150 flex flex-col justify-between min-h-[118px]">
-            <div className="flex items-start justify-between">
-              <div className="text-sm font-bold tracking-tight text-slate-800 leading-snug">
-                {t('empPrivacyProtocol')}
-              </div>
-              <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
-                <ShieldCheck weight="fill" className="w-5 h-5" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <h3 className="text-xs font-semibold text-slate-600 tracking-tight leading-snug">
-                {t('empSalariesProtected')}
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 leading-tight font-mono">
-                {t('empRbacMasking')}
-              </p>
-            </div>
-          </div>
+          <MetricCard
+            title={t('empPrivacyProtocol')}
+            icon={ShieldCheck}
+            value="—"
+            subtitle={t('empSalariesProtected')}
+          />
         )}
       </div>
 
@@ -397,7 +385,7 @@ export const EmployeesPage: React.FC = () => {
             type="button"
             onClick={() => setToastMessage(null)}
             aria-label={t('closeDialog')}
-            className="text-emerald-600 hover:text-emerald-900 font-bold ml-2 cursor-pointer px-1.5 py-0.5 rounded"
+            className="text-emerald-700 hover:text-emerald-900 font-bold ml-2 cursor-pointer px-1.5 py-0.5 rounded"
           >
             ×
           </button>
@@ -426,7 +414,7 @@ export const EmployeesPage: React.FC = () => {
       )}
 
       {/* 2. Controls Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white/90 backdrop-blur-md rounded-2xl p-4 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-xl p-4 border border-slate-200">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1 max-w-xl">
           <div className="relative w-full">
             <MagnifyingGlass
@@ -439,7 +427,7 @@ export const EmployeesPage: React.FC = () => {
               placeholder={t('empSearchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full h-10 pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+              className="w-full h-10 pl-10 pr-4 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
             />
           </div>
 
@@ -464,7 +452,7 @@ export const EmployeesPage: React.FC = () => {
             type="button"
             onClick={handleOpenAdd}
             aria-label={t('addEmployee')}
-            className="flex items-center justify-center gap-2 min-h-[40px] px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.96] text-white text-xs font-bold shadow-sm transition-[transform,background-color] duration-100 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer shrink-0"
+            className="flex items-center justify-center gap-2 min-h-[40px] px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.96] text-white text-xs font-bold shadow-sm transition-[transform,background-color] duration-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer shrink-0"
           >
             <UserPlus weight="bold" className="w-4 h-4" />
             <span>{t('addEmployee')}</span>
@@ -472,13 +460,25 @@ export const EmployeesPage: React.FC = () => {
         )}
       </div>
 
+      <FilterTabs
+        label={t('emFilterLabel')}
+        value={statusTab}
+        onChange={setStatusTab}
+        tabs={[
+          { value: 'ACTIVE', label: t('emTabActive'), count: groupCount('ACTIVE') },
+          { value: 'ON_LEAVE', label: t('emTabOnLeave'), count: groupCount('ON_LEAVE') },
+          { value: 'FORMER', label: t('emTabFormer'), count: groupCount('FORMER') },
+          { value: 'ALL', label: t('lvTabAll'), count: filteredEmployees.length },
+        ]}
+      />
+
       {/* 3. Employees Table Card */}
-      <div className="bg-white/90 backdrop-blur-md rounded-2xl border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <UsersThree weight="duotone" className="w-5 h-5 text-blue-600" />
+            <UsersThree weight="duotone" className="w-5 h-5 text-brand-600" />
             <h2 className="text-sm font-bold text-slate-900 tracking-tight">
-              {t('empDirTitle', { count: filteredEmployees.length })}
+              {t('empDirTitle', { count: tabEmployees.length })}
             </h2>
           </div>
           <span className="text-xs text-slate-400">
@@ -489,84 +489,84 @@ export const EmployeesPage: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+              <tr className="bg-slate-50 text-xs font-semibold text-slate-600 border-b border-slate-200">
                 <th className="py-3 px-6">{t('colEmployee')}</th>
                 <th className="py-3 px-6">{t('colDepartment')}</th>
                 <th className="py-3 px-6">{t('colJobTitle')}</th>
                 <th className="py-3 px-6">{canViewSalary ? t('colSalary') : t('colCompensation')}</th>
                 <th className="py-3 px-6">{t('colStatus')}</th>
                 <th className="py-3 px-6">{t('colHireDate')}</th>
-                {(canEdit || canDelete) && <th className="py-3 px-6 text-right">{t('colActions')}</th>}
+                {showActions && <th className="py-3 px-6 text-right">{t('colActions')}</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-              {filteredEmployees.length === 0 ? (
+            <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
+              {tabEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 px-6 text-center text-slate-400">
-                    {t('noEmployeesMatch')}
+                  <td colSpan={7} className="py-10 px-6 text-center text-slate-500">
+                    {filteredEmployees.length === 0 ? t('noEmployeesMatch') : t('emNoneInTab')}
                   </td>
                 </tr>
               ) : (
-                filteredEmployees.map((emp) => (
+                tabEmployees.map((emp) => (
                   <tr key={emp.employeeId} className="hover:bg-slate-50/60 transition-colors">
                     <td className="py-3.5 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs ring-2 ring-white shadow-sm overflow-hidden flex-shrink-0">
-                          {emp.avatarUrl ? (
-                            <img
-                              src={emp.avatarUrl}
-                              alt={`${emp.firstName} ${emp.lastName}`}
-                              width={36}
-                              height={36}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`
-                          )}
-                        </div>
+                        <InitialsAvatar name={`${emp.firstName} ${emp.lastName}`} size="lg" employeeId={emp.employeeId} />
                         <div>
                           <div className="font-semibold text-slate-900">
                             {emp.firstName} {emp.lastName}
                           </div>
-                          <div className="text-[11px] text-slate-400">{emp.email}</div>
+                          <div className="text-[13px] text-slate-500">{emp.email}</div>
                         </div>
                       </div>
                     </td>
                     <td className="py-3.5 px-6 font-medium">{emp.departmentName}</td>
                     <td className="py-3.5 px-6 text-slate-600">{emp.jobTitle}</td>
-                    <td className="py-3.5 px-6 font-mono tabular-nums">
+                    <td className="py-3.5 px-6 tabular-nums">
                       {canViewSalary ? (
                         <span className="font-semibold text-slate-900">
                           ${(emp.salary || 0).toLocaleString()}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 text-slate-400 text-[11px]">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 text-slate-400 text-xs">
                           <EyeSlash weight="bold" className="w-3 h-3 text-slate-400" />
                           <span>{t('confidentialLabel')}</span>
                         </span>
                       )}
                     </td>
                     <td className="py-3.5 px-6">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap ${getStatusBadgeClasses(
-                          emp.status
-                        )}`}
-                      >
-                        {tStatus(emp.status)}
-                      </span>
+                      <StatusChip tone={statusTone(emp.status)}>{tStatus(emp.status)}</StatusChip>
                     </td>
-                    <td className="py-3.5 px-6 text-slate-500 font-mono text-[11px] tabular-nums">
-                      {emp.hireDate || emp.contractEndDate || '—'}
+                    <td className="py-3.5 px-6 text-slate-600 tabular-nums whitespace-nowrap">
+                      <div>{fmtDate(emp.hireDate)}</div>
+                      {contractEndingSoon(emp) && (
+                        <div className="mt-1">
+                          <StatusChip tone="warn">
+                            {t('emContractEnds', { date: fmtDate(emp.contractEndDate) })}
+                          </StatusChip>
+                        </div>
+                      )}
                     </td>
-                    {(canEdit || canDelete) && (
+                    {showActions && (
                       <td className="py-3.5 px-6 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {canViewHistory && (
+                            <button
+                              type="button"
+                              onClick={() => openHistory(emp)}
+                              aria-label={t('jhOpenAria', { name: `${emp.firstName} ${emp.lastName}` })}
+                              title={t('jhTitle')}
+                              className="w-9 h-9 rounded-lg text-slate-500 hover:text-brand-700 hover:bg-brand-50 transition-colors inline-flex items-center justify-center focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
+                            >
+                              <ClockCounterClockwise weight="bold" className="w-4 h-4" />
+                            </button>
+                          )}
                           {canEdit && (
                             <button
                               type="button"
                               onClick={() => handleOpenEdit(emp)}
                               aria-label={`${t('editEmployeeTitle')} ${emp.firstName} ${emp.lastName}`}
-                              className="min-w-[36px] min-h-[36px] p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-blue-50 active:scale-[0.96] transition-[transform,background-color,color] duration-100 inline-flex items-center justify-center focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+                              className="min-w-[36px] min-h-[36px] p-2 rounded-xl text-slate-400 hover:text-brand-600 hover:bg-brand-50 active:scale-[0.96] transition-[transform,background-color,color] duration-100 inline-flex items-center justify-center focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
                               title={t('editEmployeeTitle')}
                             >
                               <PencilSimple weight="bold" className="w-4 h-4" />
@@ -594,6 +594,17 @@ export const EmployeesPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Job history (Admin/HR only) */}
+      <Modal
+        isOpen={!!historyFor}
+        onClose={() => setHistoryFor(null)}
+        title={t('jhTitle')}
+        subtitle={historyFor ? t('jhSub', { name: `${historyFor.firstName} ${historyFor.lastName}` }) : undefined}
+        maxWidth="lg"
+      >
+        <JobHistoryTimeline items={history} loading={historyLoading} error={historyError} />
+      </Modal>
+
       {/* 4. Add Employee Modal */}
       <Modal
         isOpen={isAddModalOpen}
@@ -605,7 +616,7 @@ export const EmployeesPage: React.FC = () => {
         <form onSubmit={handleCreate} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="empFirstName" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="empFirstName" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('firstNameLabel')}
               </label>
               <input
@@ -617,11 +628,11 @@ export const EmployeesPage: React.FC = () => {
                   setFormData({ ...formData, firstName: e.target.value });
                   if (formError) setFormError(null);
                 }}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
             <div>
-              <label htmlFor="empLastName" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="empLastName" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('lastNameLabel')}
               </label>
               <input
@@ -633,14 +644,14 @@ export const EmployeesPage: React.FC = () => {
                   setFormData({ ...formData, lastName: e.target.value });
                   if (formError) setFormError(null);
                 }}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="empEmail" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="empEmail" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('emailLabel')}
               </label>
               <input
@@ -653,11 +664,11 @@ export const EmployeesPage: React.FC = () => {
                   setFormData({ ...formData, email: e.target.value });
                   if (formError) setFormError(null);
                 }}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
             <div>
-              <label htmlFor="empPhone" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="empPhone" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('phoneLabel')}
               </label>
               <input
@@ -665,14 +676,14 @@ export const EmployeesPage: React.FC = () => {
                 type="text"
                 value={formData.phoneNumber}
                 onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('departmentLabel')}
               </label>
               <BehavioralHistorySelect
@@ -699,7 +710,7 @@ export const EmployeesPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('jobTitleCountLabel', { count: departmentJobs.length })}
               </label>
               <BehavioralHistorySelect
@@ -726,7 +737,7 @@ export const EmployeesPage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="empSalary" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="empSalary" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('monthlyBaseSalaryLabel')}
               </label>
               <input
@@ -735,24 +746,11 @@ export const EmployeesPage: React.FC = () => {
                 required
                 value={formData.salary}
                 onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
-              {(() => {
-                const selectedJob =
-                  departmentJobs.find((j) => j.jobTitle === formData.jobTitle) || departmentJobs[0];
-                if (selectedJob?.minSalary && selectedJob?.maxSalary) {
-                  return (
-                    <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                      {t('approvedBandLabel')} ${selectedJob.minSalary.toLocaleString()} – $
-                      {selectedJob.maxSalary.toLocaleString()}
-                    </p>
-                  );
-                }
-                return null;
-              })()}
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('genderLabel')}
               </label>
               <BehavioralHistorySelect
@@ -796,7 +794,7 @@ export const EmployeesPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 min-h-[40px] px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.96] text-white text-xs font-semibold shadow-sm transition-[transform,background-color] duration-100 disabled:opacity-60 cursor-pointer"
+              className="inline-flex items-center gap-2 min-h-[40px] px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.96] text-white text-xs font-semibold shadow-sm transition-[transform,background-color] duration-100 disabled:opacity-60 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
@@ -824,7 +822,7 @@ export const EmployeesPage: React.FC = () => {
         <form onSubmit={handleUpdate} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="editEmpFirstName" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="editEmpFirstName" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('firstNameLabel')}
               </label>
               <input
@@ -833,11 +831,11 @@ export const EmployeesPage: React.FC = () => {
                 required
                 value={editFormData.firstName}
                 onChange={(e) => setEditFormData({ ...editFormData, firstName: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
             <div>
-              <label htmlFor="editEmpLastName" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="editEmpLastName" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('lastNameLabel')}
               </label>
               <input
@@ -846,14 +844,14 @@ export const EmployeesPage: React.FC = () => {
                 required
                 value={editFormData.lastName}
                 onChange={(e) => setEditFormData({ ...editFormData, lastName: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="editEmpEmail" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="editEmpEmail" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('emailLabel')}
               </label>
               <input
@@ -863,11 +861,11 @@ export const EmployeesPage: React.FC = () => {
                 spellCheck={false}
                 value={editFormData.email}
                 onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
             <div>
-              <label htmlFor="editEmpPhone" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="editEmpPhone" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('phoneLabel')}
               </label>
               <input
@@ -875,14 +873,14 @@ export const EmployeesPage: React.FC = () => {
                 type="text"
                 value={editFormData.phoneNumber}
                 onChange={(e) => setEditFormData({ ...editFormData, phoneNumber: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('departmentLabel')}
               </label>
               <BehavioralHistorySelect
@@ -909,7 +907,7 @@ export const EmployeesPage: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('jobTitleCountLabel', { count: editDepartmentJobs.length })}
               </label>
               <BehavioralHistorySelect
@@ -936,7 +934,7 @@ export const EmployeesPage: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="editEmpSalary" className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label htmlFor="editEmpSalary" className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('monthlyBaseSalaryLabel')}
               </label>
               <input
@@ -945,25 +943,11 @@ export const EmployeesPage: React.FC = () => {
                 required
                 value={editFormData.salary}
                 onChange={(e) => setEditFormData({ ...editFormData, salary: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm sm:text-xs text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
-              {(() => {
-                const currentJob =
-                  editDepartmentJobs.find((j) => j.jobTitle === editFormData.jobTitle) ||
-                  editDepartmentJobs[0];
-                if (currentJob?.minSalary && currentJob?.maxSalary) {
-                  return (
-                    <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                      {t('approvedBandLabel')} ${currentJob.minSalary.toLocaleString()} – $
-                      {currentJob.maxSalary.toLocaleString()}
-                    </p>
-                  );
-                }
-                return null;
-              })()}
             </div>
             <div>
-              <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+              <label className="block text-sm font-semibold text-slate-800 mb-1.5">
                 {t('employmentStatusLabel')}
               </label>
               <BehavioralHistorySelect
@@ -1005,7 +989,7 @@ export const EmployeesPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="inline-flex items-center gap-2 min-h-[40px] px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-[0.96] text-white text-xs font-semibold shadow-sm transition-[transform,background-color] duration-100 disabled:opacity-60 cursor-pointer"
+              className="inline-flex items-center gap-2 min-h-[40px] px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.96] text-white text-xs font-semibold shadow-sm transition-[transform,background-color] duration-100 disabled:opacity-60 cursor-pointer"
             >
               {isSubmitting ? (
                 <>
