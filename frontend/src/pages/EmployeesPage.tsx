@@ -25,6 +25,7 @@ import { payrollApi, employeeApi, JobHistoryItem } from '../api';
 import { MetricCard } from '../components/dashboard/MetricCard';
 import { InitialsAvatar, StatusChip, localeFor, parseDateKey, toDateKey } from '../components/dashboard/DashboardCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
+import { JobHistoryTimeline } from '../components/employees/JobHistoryTimeline';
 
 export const EmployeesPage: React.FC = () => {
   const {
@@ -585,42 +586,7 @@ export const EmployeesPage: React.FC = () => {
         subtitle={historyFor ? t('jhSub', { name: `${historyFor.firstName} ${historyFor.lastName}` }) : undefined}
         maxWidth="lg"
       >
-        {historyLoading ? (
-          <div className="py-10 text-center text-slate-500">
-            <CircleNotch weight="bold" className="inline w-5 h-5 animate-spin" aria-label="Loading" />
-          </div>
-        ) : historyError ? (
-          <p role="alert" className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800">
-            {historyError}
-          </p>
-        ) : history.length === 0 ? (
-          <p className="py-8 text-center text-sm text-slate-500">{t('jhEmpty')}</p>
-        ) : (
-          <ol className="relative flex flex-col gap-5 pl-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-px before:bg-slate-200">
-            {history.map((h, i) => {
-              const current = !h.endDate;
-              return (
-                <li key={`${h.jobTitle}-${h.startedDate}-${i}`} className="relative">
-                  <span
-                    aria-hidden="true"
-                    className={`absolute -left-6 top-1 w-[15px] h-[15px] rounded-full border-2 border-white ${
-                      current ? 'bg-brand-600' : 'bg-slate-300'
-                    }`}
-                  />
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-slate-900">{h.jobTitle}</span>
-                    {current && <StatusChip tone="ok">{t('jhCurrent')}</StatusChip>}
-                  </div>
-                  <div className="text-[13px] text-slate-600 mt-0.5">{h.departmentName}</div>
-                  <div className="text-[13px] text-slate-500 mt-0.5 tabular-nums">
-                    {fmtDate(h.startedDate)} – {h.endDate ? fmtDate(h.endDate) : t('jhPresent')}
-                  </div>
-                  {h.remark && <p className="text-[13px] text-slate-600 mt-1">{h.remark}</p>}
-                </li>
-              );
-            })}
-          </ol>
-        )}
+        <JobHistoryTimeline items={history} loading={historyLoading} error={historyError} />
       </Modal>
 
       {/* 4. Add Employee Modal */}

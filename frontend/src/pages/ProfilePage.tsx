@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Envelope,
   IdentificationCard,
@@ -18,7 +18,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { useHrmsStore } from '../store/useHrmsStore';
 import { getRoleBadge, ROLE_PERMISSIONS, hasPermission, isRoleAllowedForTab } from '../utils/rbac';
 import { DashboardCard, StatusChip } from '../components/dashboard/DashboardCard';
-import { authApi } from '../api';
+import { authApi, employeeApi, JobHistoryItem } from '../api';
+import { JobHistoryTimeline } from '../components/employees/JobHistoryTimeline';
 import { invalidateEmployeePhoto } from '../lib/employeePhotos';
 import { useI18n } from '../i18n/useI18n';
 
@@ -30,6 +31,25 @@ export const ProfilePage: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // My own job history (GET /api/employees/me/job-history only ever returns the signed-in user's).
+  const [myHistory, setMyHistory] = useState<JobHistoryItem[]>([]);
+  const [myHistoryLoading, setMyHistoryLoading] = useState(false);
+  const [myHistoryError, setMyHistoryError] = useState<string | null>(null);
+  const hasEmployeeRecord = currentUser.employeeId != null;
+  useEffect(() => {
+    if (!hasEmployeeRecord) return;
+    let cancelled = false;
+    setMyHistoryLoading(true);
+    employeeApi
+      .getMyJobHistory()
+      .then((items) => !cancelled && setMyHistory(Array.isArray(items) ? items : []))
+      .catch(() => !cancelled && setMyHistoryError(t('jhLoadFailed')))
+      .finally(() => !cancelled && setMyHistoryLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [hasEmployeeRecord, t]);
 
   const roleBadge = getRoleBadge(currentUser.role);
   const roleInfo = tRole(currentUser.role);
@@ -257,7 +277,14 @@ export const ProfilePage: React.FC = () => {
         </dl>
       </DashboardCard>
 
-      {/* 3. What this role can do (each item checked against the real permission matrix) */}
+      {/* 3. My job history (own record only) */}
+      {hasEmployeeRecord && (
+        <DashboardCard title={t('pfJobHistoryTitle')} subtitle={t('pfJobHistorySub')}>
+          <JobHistoryTimeline items={myHistory} loading={myHistoryLoading} error={myHistoryError} />
+        </DashboardCard>
+      )}
+
+      {/* 4. What this role can do (each item checked against the real permission matrix) */}
       <DashboardCard
         title={t('roleEntitlementsTitle')}
         subtitle={`${t('roleEntitlementsSub')} · ${t('pfIncludedCount', { count: includedCount, total: humanCapabilities.length })}`}

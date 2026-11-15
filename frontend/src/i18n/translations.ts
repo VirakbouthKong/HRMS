@@ -105,6 +105,9 @@ export const translations = {
     dashJobRunning: 'Running',
     dashNoRuns: 'No scheduled jobs have run yet.',
     dashOpenAutomations: 'Open automations',
+    // Profile: my job history
+    pfJobHistoryTitle: 'My job history',
+    pfJobHistorySub: 'Roles you have held, newest first',
     // Filtered reports
     frTitle: 'Filtered reports',
     frSub: 'Choose a report and filters, then run it. Export the result as CSV.',
@@ -1076,6 +1079,9 @@ export const translations = {
     dashJobRunning: 'កំពុងដំណើរការ',
     dashNoRuns: 'មិនទាន់មានការងារកំណត់ពេលដំណើរការនៅឡើយទេ។',
     dashOpenAutomations: 'បើកស្វ័យប្រវត្តិកម្ម',
+    // Profile: my job history
+    pfJobHistoryTitle: 'ប្រវត្តិការងាររបស់ខ្ញុំ',
+    pfJobHistorySub: 'តួនាទីដែលអ្នកធ្លាប់កាន់ ថ្មីបំផុតមុន',
     // Filtered reports
     frTitle: 'របាយការណ៍តាមលក្ខខណ្ឌ',
     frSub: 'ជ្រើសរើសរបាយការណ៍ និងលក្ខខណ្ឌ រួចដំណើរការ។ នាំចេញលទ្ធផលជា CSV។',
