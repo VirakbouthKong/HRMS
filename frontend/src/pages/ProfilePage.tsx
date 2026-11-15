@@ -20,6 +20,7 @@ import { getRoleBadge, ROLE_PERMISSIONS, hasPermission, isRoleAllowedForTab } fr
 import { DashboardCard, StatusChip } from '../components/dashboard/DashboardCard';
 import { authApi, employeeApi, JobHistoryItem } from '../api';
 import { JobHistoryTimeline } from '../components/employees/JobHistoryTimeline';
+import { ContactDetailsCard } from '../components/profile/ContactDetailsCard';
 import { invalidateEmployeePhoto } from '../lib/employeePhotos';
 import { useAppConfig } from '../lib/appConfig';
 import { useI18n } from '../i18n/useI18n';
@@ -286,6 +287,9 @@ export const ProfilePage: React.FC = () => {
           </div>
         </dl>
       </DashboardCard>
+
+      {/* Contact details the employee maintains themselves */}
+      {hasEmployeeRecord && <ContactDetailsCard />}
 
       {/* 3. My job history (own record only) */}
       {hasEmployeeRecord && (

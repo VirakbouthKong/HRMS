@@ -365,6 +365,14 @@ export const configApi = {
 // 2. Employee API
 // ==========================================
 
+export interface MyContactDetails {
+  phoneNumber?: string | null;
+  address?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  emergencyContactRelation?: string | null;
+}
+
 export const employeeApi = {
   getAll: async (params?: { status?: string; departmentId?: number }): Promise<Employee[]> => {
     const res = await apiClient.get<Employee[]>('/api/employees', { params });
@@ -391,6 +399,11 @@ export const employeeApi = {
     return res.data;
   },
 
+  /** PATCH /api/employees/me/contact: the signed-in employee's own contact details only. */
+  updateMyContact: async (data: MyContactDetails): Promise<Employee & MyContactDetails> => {
+    const res = await apiClient.patch<Employee & MyContactDetails>('/api/employees/me/contact', data);
+    return res.data;
+  },
   getMyProfile: async (): Promise<Employee> => {
     const res = await apiClient.get<Employee>('/api/employees/me');
     return res.data;
