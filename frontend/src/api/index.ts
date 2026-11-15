@@ -161,13 +161,17 @@ export const authApi = {
   },
 
   /**
-   * Retrieve logged-in user profile photo as binary Blob
+   * Retrieve logged-in user profile photo as binary Blob.
+   * Without an uploaded photo the gateway returns a generated SVG initials avatar and sets
+   * `X-Default-Avatar: true`; uploads are only JPG/PNG/WebP, so SVG also means "default".
    */
-  getProfilePhoto: async (): Promise<Blob> => {
+  getProfilePhoto: async (): Promise<{ blob: Blob; isDefault: boolean }> => {
     const res = await apiClient.get<Blob>('/api/auth/me/photo', {
       responseType: 'blob',
     });
-    return res.data;
+    const headerSaysDefault = String(res.headers?.['x-default-avatar'] ?? '').toLowerCase() === 'true';
+    const contentType = String(res.headers?.['content-type'] ?? res.data?.type ?? '').toLowerCase();
+    return { blob: res.data, isDefault: headerSaysDefault || contentType.includes('svg') };
   },
 
   /**

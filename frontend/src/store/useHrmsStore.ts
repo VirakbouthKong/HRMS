@@ -60,6 +60,10 @@ const getInitialLanguage = (): Language => {
   return 'en';
 };
 
+/** The user as saved in localStorage: blob: photo URLs are per-page and must not be persisted. */
+const toStoredUser = (user: UserAccount): UserAccount =>
+  user.avatarUrl?.startsWith('blob:') ? { ...user, avatarUrl: '' } : user;
+
 const getLocalDateStr = (date = new Date()): string => {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -250,6 +254,10 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
       const uStr = localStorage.getItem('hrms_user');
       if (uStr) {
         initialUser = JSON.parse(uStr);
+        // blob: URLs die with the page; a stored one would render as a broken image until the next sync.
+        if (initialUser.avatarUrl?.startsWith('blob:')) {
+          initialUser = { ...initialUser, avatarUrl: '' };
+        }
       }
     }
   } catch {
@@ -277,14 +285,14 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
         }
         const updatedUser = { ...s.currentUser, avatarUrl: newUrl };
         if (typeof localStorage !== 'undefined') {
-          localStorage.setItem('hrms_user', JSON.stringify(updatedUser));
+          localStorage.setItem('hrms_user', JSON.stringify(toStoredUser(updatedUser)));
         }
         return { currentUser: updatedUser };
       });
     },
     login: (user, token) => {
       if (typeof window !== 'undefined') {
-        localStorage.setItem('hrms_user', JSON.stringify(user));
+        localStorage.setItem('hrms_user', JSON.stringify(toStoredUser(user)));
         localStorage.setItem('hrms_authenticated', 'true');
         if (token) {
           localStorage.setItem('hrms_jwt_token', token);
@@ -391,13 +399,15 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
             res.reason?.response?.status === 503 ||
             res.reason?.response?.status === 504);
 
-        // Fetch profile photo in background if available
+        // Fetch profile photo in background. The generated default avatar counts as "no photo",
+        // so the app's own initials avatar shows and "Remove photo" stays hidden.
         authApi
           .getProfilePhoto()
-          .then((blob) => {
-            if (blob && blob.size > 0) {
-              const objUrl = URL.createObjectURL(blob);
-              get().updateUserAvatar(objUrl);
+          .then(({ blob, isDefault }) => {
+            if (blob && blob.size > 0 && !isDefault) {
+              get().updateUserAvatar(URL.createObjectURL(blob));
+            } else if (get().currentUser.avatarUrl) {
+              get().updateUserAvatar('');
             }
           })
           .catch(() => {
@@ -465,7 +475,7 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
                 employeeId: employees[0].employeeId,
               };
               if (typeof localStorage !== 'undefined') {
-                localStorage.setItem('hrms_user', JSON.stringify(updatedUser));
+                localStorage.setItem('hrms_user', JSON.stringify(toStoredUser(updatedUser)));
               }
               set({ currentUser: updatedUser });
             }
