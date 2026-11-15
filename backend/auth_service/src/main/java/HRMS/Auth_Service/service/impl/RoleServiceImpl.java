@@ -12,10 +12,22 @@ import HRMS.Auth_Service.service.RoleService;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class RoleServiceImpl implements RoleService {
+
+    /**
+     * Roles the gateway and services authorise by name (see DataInitializer and the gateway rules).
+     * Renaming or deleting one would lock its users out, so only their description may change.
+     */
+    private static final Set<String> SYSTEM_ROLES = Set.of("ADMIN", "HR_MANAGER", "HR_STAFF", "EMPLOYEE");
+
+    private static boolean isSystemRole(String roleName) {
+        return roleName != null && SYSTEM_ROLES.contains(roleName.toUpperCase(Locale.ROOT));
+    }
 
     private final RoleRepository roleRepository;
     private final AccountRepository accountRepository;
@@ -84,6 +96,10 @@ public class RoleServiceImpl implements RoleService {
 
         Role role = optionalRole.get();
 
+        if (isSystemRole(role.getRoleName()) && !role.getRoleName().equals(request.getRoleName())) {
+            return new ApiResponse(false, "System roles cannot be renamed. Only the description can change.");
+        }
+
         role.setRoleName(request.getRoleName());
         role.setDescription(request.getDescription());
 
@@ -99,6 +115,10 @@ public class RoleServiceImpl implements RoleService {
 
         if (role.isEmpty()) {
             return new ApiResponse(false, "Role not found.");
+        }
+
+        if (isSystemRole(role.get().getRoleName())) {
+            return new ApiResponse(false, "System roles cannot be deleted.");
         }
 
         if (accountRepository.existsByRole(role.get())) {
