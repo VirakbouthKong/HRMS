@@ -418,7 +418,7 @@ export const AccountsPage: React.FC = () => {
                   <tr key={a.accountId}>
                     <td className="py-3.5 px-5">
                       <div className="flex items-center gap-3">
-                        <InitialsAvatar name={a.userName.replace(/[._-]/g, ' ')} size="sm" />
+                        <InitialsAvatar name={a.userName.replace(/[._-]/g, ' ')} size="sm" employeeId={a.employeeId} />
                         <span className="font-semibold text-slate-900">{a.userName}</span>
                         {self && <StatusChip tone="neutral">{t('acYou')}</StatusChip>}
                       </div>

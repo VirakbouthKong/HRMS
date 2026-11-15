@@ -283,7 +283,7 @@ export const LeavesPage: React.FC = () => {
                       <tr key={leave.leaveId}>
                         <td className="py-3.5 px-5">
                           <div className="flex items-center gap-3">
-                            <InitialsAvatar name={leave.employeeName} size="sm" />
+                            <InitialsAvatar name={leave.employeeName} size="sm" employeeId={leave.employeeId} />
                             <span className="font-semibold text-slate-900">{leave.employeeName}</span>
                           </div>
                         </td>
@@ -360,7 +360,7 @@ export const LeavesPage: React.FC = () => {
               <ul className="flex flex-col gap-3">
                 {whoIsOut.map((l) => (
                   <li key={l.leaveId} className="flex items-center gap-3">
-                    <InitialsAvatar name={l.employeeName} size="sm" />
+                    <InitialsAvatar name={l.employeeName} size="sm" employeeId={l.employeeId} />
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold text-slate-900 truncate">{l.employeeName}</div>
                       <div className="text-[13px] text-slate-500 truncate">

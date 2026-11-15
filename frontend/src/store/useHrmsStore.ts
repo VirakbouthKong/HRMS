@@ -24,6 +24,7 @@ import {
   cronApi,
   reportApi,
 } from '../api';
+import { clearEmployeePhotos } from '../lib/employeePhotos';
 import { Language } from '../i18n/translations';
 
 export type NavTab =
@@ -306,6 +307,7 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
       get().syncWithGateway();
     },
     logout: () => {
+      clearEmployeePhotos();
       if (typeof window !== 'undefined') {
         localStorage.setItem('hrms_authenticated', 'false');
         localStorage.removeItem('hrms_jwt_token');

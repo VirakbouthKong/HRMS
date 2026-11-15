@@ -386,7 +386,7 @@ export const PayrollPage: React.FC = () => {
                   <tr key={p.recordId}>
                     <td className="py-3.5 px-5">
                       <div className="flex items-center gap-3">
-                        <InitialsAvatar name={p.employeeName} size="sm" />
+                        <InitialsAvatar name={p.employeeName} size="sm" employeeId={p.employeeId} />
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-900">{p.employeeName}</div>
                           {p.jobTitle && <div className="text-[13px] text-slate-500">{p.jobTitle}</div>}

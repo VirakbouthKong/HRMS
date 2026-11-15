@@ -407,7 +407,7 @@ export const AttendancePage: React.FC = () => {
                         <td className="py-3.5 px-5">
                           {canViewAll ? (
                             <div className="flex items-center gap-3">
-                              <InitialsAvatar name={rec.employeeName} size="sm" />
+                              <InitialsAvatar name={rec.employeeName} size="sm" employeeId={rec.employeeId} />
                               <span className="font-semibold text-slate-900">{rec.employeeName}</span>
                             </div>
                           ) : (
@@ -467,7 +467,7 @@ export const AttendancePage: React.FC = () => {
                       key={corr.correctionId}
                       className="flex flex-wrap items-center gap-3 py-3.5 border-t border-slate-100 first:border-0"
                     >
-                      <InitialsAvatar name={corr.employeeName} />
+                      <InitialsAvatar name={corr.employeeName} employeeId={corr.employeeId} />
                       <div className="flex-1 min-w-[240px]">
                         <div className="text-sm font-semibold text-slate-900">
                           {corr.employeeName}{' '}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEmployeePhoto } from '../../lib/employeePhotos';
 
 interface DashboardCardProps {
   title: string;
@@ -58,14 +59,25 @@ export const initialsOf = (name?: string) =>
 
 const AVATAR_TINTS = ['bg-brand-100', 'bg-violet-100', 'bg-amber-100', 'bg-sky-100', 'bg-rose-100'];
 
-export const InitialsAvatar: React.FC<{ name?: string; size?: 'sm' | 'md' }> = ({ name, size = 'md' }) => {
+/**
+ * Round avatar: the employee's real photo when `employeeId` is given and they uploaded one,
+ * otherwise their initials. Decorative (the name is always shown next to it).
+ */
+export const InitialsAvatar: React.FC<{ name?: string; size?: 'sm' | 'md' | 'lg'; employeeId?: number | null }> = ({
+  name,
+  size = 'md',
+  employeeId,
+}) => {
+  const { ref, url } = useEmployeePhoto<HTMLSpanElement>(employeeId);
   const tint = AVATAR_TINTS[(name || '').length % AVATAR_TINTS.length];
+  const dims = size === 'sm' ? 'w-8 h-8 text-[11px]' : size === 'lg' ? 'w-10 h-10 text-sm' : 'w-9 h-9 text-xs';
   return (
     <span
+      ref={ref}
       aria-hidden="true"
-      className={`${size === 'sm' ? 'w-8 h-8 text-[11px]' : 'w-9 h-9 text-xs'} ${tint} rounded-full inline-flex items-center justify-center font-semibold text-slate-900 shrink-0`}
+      className={`${dims} ${url ? 'bg-slate-100' : tint} rounded-full inline-flex items-center justify-center font-semibold text-slate-900 shrink-0 overflow-hidden`}
     >
-      {initialsOf(name)}
+      {url ? <img src={url} alt="" className="w-full h-full object-cover" draggable={false} /> : initialsOf(name)}
     </span>
   );
 };

@@ -23,7 +23,7 @@ import { hasPermission } from '../utils/rbac';
 import { useI18n } from '../i18n/useI18n';
 import { payrollApi, employeeApi, JobHistoryItem } from '../api';
 import { MetricCard } from '../components/dashboard/MetricCard';
-import { StatusChip, localeFor, parseDateKey, toDateKey } from '../components/dashboard/DashboardCard';
+import { InitialsAvatar, StatusChip, localeFor, parseDateKey, toDateKey } from '../components/dashboard/DashboardCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
 
 export const EmployeesPage: React.FC = () => {
@@ -494,19 +494,7 @@ export const EmployeesPage: React.FC = () => {
                   <tr key={emp.employeeId} className="hover:bg-slate-50/60 transition-colors">
                     <td className="py-3.5 px-6">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs ring-2 ring-white shadow-sm overflow-hidden flex-shrink-0">
-                          {emp.avatarUrl ? (
-                            <img
-                              src={emp.avatarUrl}
-                              alt={`${emp.firstName} ${emp.lastName}`}
-                              width={36}
-                              height={36}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`
-                          )}
-                        </div>
+                        <InitialsAvatar name={`${emp.firstName} ${emp.lastName}`} size="lg" employeeId={emp.employeeId} />
                         <div>
                           <div className="font-semibold text-slate-900">
                             {emp.firstName} {emp.lastName}

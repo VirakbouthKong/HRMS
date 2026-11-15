@@ -292,6 +292,19 @@ export const accountApi = {
   },
 };
 
+/**
+ * Employee icons (any signed-in user). Needs the token, so load via fetch + object URL, not <img src>.
+ * `isDefault` is true for the generated initials/silhouette picture (X-Default-Avatar, or SVG).
+ */
+export const photoApi = {
+  getEmployeePhoto: async (employeeId: number): Promise<{ blob: Blob; isDefault: boolean }> => {
+    const res = await apiClient.get<Blob>(`/api/photos/employees/${employeeId}`, { responseType: 'blob' });
+    const headerSaysDefault = String(res.headers?.['x-default-avatar'] ?? '').toLowerCase() === 'true';
+    const contentType = String(res.headers?.['content-type'] ?? res.data?.type ?? '').toLowerCase();
+    return { blob: res.data, isDefault: headerSaysDefault || contentType.includes('svg') };
+  },
+};
+
 export const roleApi = {
   getAll: async (): Promise<RoleSummary[]> => {
     const res = await apiClient.get<RoleSummary[]>('/api/roles');

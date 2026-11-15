@@ -22,6 +22,7 @@ import { Modal, Drawer } from '../components/ui/modal';
 import { useI18n } from '../i18n/useI18n';
 import { hasPermission } from '../utils/rbac';
 import { MetricCard } from '../components/dashboard/MetricCard';
+import { InitialsAvatar } from '../components/dashboard/DashboardCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
 
 export const DepartmentsPage: React.FC = () => {
@@ -567,19 +568,7 @@ export const DepartmentsPage: React.FC = () => {
                 className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-3">
-                  {emp.avatarUrl ? (
-                    <img
-                      src={emp.avatarUrl}
-                      alt={`${emp.firstName} ${emp.lastName}`}
-                      width={36}
-                      height={36}
-                      className="w-9 h-9 rounded-full object-cover shrink-0"
-                    />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full bg-brand-100 text-brand-700 font-bold flex items-center justify-center text-xs shrink-0">
-                      {`${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`}
-                    </div>
-                  )}
+                  <InitialsAvatar name={`${emp.firstName} ${emp.lastName}`} employeeId={emp.employeeId} />
                   <div>
                     <h4 className="text-xs font-bold text-slate-900 leading-snug">
                       {emp.firstName} {emp.lastName}

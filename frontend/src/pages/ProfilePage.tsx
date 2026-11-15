@@ -19,6 +19,7 @@ import { useHrmsStore } from '../store/useHrmsStore';
 import { getRoleBadge, ROLE_PERMISSIONS, hasPermission, isRoleAllowedForTab } from '../utils/rbac';
 import { DashboardCard, StatusChip } from '../components/dashboard/DashboardCard';
 import { authApi } from '../api';
+import { invalidateEmployeePhoto } from '../lib/employeePhotos';
 import { useI18n } from '../i18n/useI18n';
 
 export const ProfilePage: React.FC = () => {
@@ -89,6 +90,7 @@ export const ProfilePage: React.FC = () => {
       await authApi.uploadProfilePhoto(file);
       const previewUrl = URL.createObjectURL(file);
       updateUserAvatar(previewUrl);
+      invalidateEmployeePhoto(currentUser.employeeId);
       setToastMessage(t('photoUpdatedToast'));
       setTimeout(() => setToastMessage(null), 3500);
     } catch (err: any) {
@@ -107,6 +109,7 @@ export const ProfilePage: React.FC = () => {
     try {
       await authApi.deleteProfilePhoto();
       updateUserAvatar('');
+      invalidateEmployeePhoto(currentUser.employeeId);
       setToastMessage(t('photoRemovedToast'));
       setTimeout(() => setToastMessage(null), 3500);
     } catch (err: any) {

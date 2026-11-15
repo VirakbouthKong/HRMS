@@ -91,10 +91,14 @@ export const ReviewQueueCard: React.FC = () => {
         <ul className="flex flex-col -mt-1">
           {shown.map((action) => {
             const { type, detail } = describe(action);
+            const employeeId =
+              action.actionKind === 'correction'
+                ? attendanceCorrections.find((c) => `corr-${c.correctionId}` === action.id)?.employeeId
+                : leaves.find((l) => `leave-${l.leaveId}` === action.id)?.employeeId;
             const busy = busyId === action.id;
             return (
               <li key={action.id} className="flex flex-wrap items-center gap-3 py-3 border-t border-slate-100 first:border-0">
-                <InitialsAvatar name={action.employeeName} />
+                <InitialsAvatar name={action.employeeName} employeeId={employeeId} />
                 <div className="flex-1 min-w-[160px]">
                   <div className="text-sm font-semibold text-slate-900">
                     {action.employeeName} <span className="font-medium text-slate-600">· {type}</span>
