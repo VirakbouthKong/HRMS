@@ -170,16 +170,16 @@ export const getRoleBadge = (role: UserRole): RoleBadgeConfig => {
         label: 'HR Operations Manager',
         shortTag: 'HR MANAGER',
         description: 'People Operations & Roster Oversight',
-        badgeClass: 'bg-blue-50 text-blue-700 border-blue-200/80',
-        dotClass: 'bg-blue-500',
+        badgeClass: 'bg-brand-50 text-brand-700 border-brand-200/80',
+        dotClass: 'bg-brand-500',
       };
     case 'ROLE_EMPLOYEE':
       return {
         label: 'Staff Member',
         shortTag: 'EMPLOYEE',
         description: 'Employee Self-Service Portal',
-        badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
-        dotClass: 'bg-emerald-500',
+        badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+        dotClass: 'bg-slate-500',
       };
   }
 };

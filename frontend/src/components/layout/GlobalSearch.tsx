@@ -143,7 +143,7 @@ export const GlobalSearch: React.FC = () => {
         subtitle: t('gsCheckInDesc'),
         icon: Clock,
         badge: t('badgePunch'),
-        badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+        badgeColor: 'bg-brand-50 text-brand-700 border-brand-200',
         onSelect: () => {
           setActiveTab('attendance');
           setIsOpen(false);
@@ -220,16 +220,14 @@ export const GlobalSearch: React.FC = () => {
     departments.forEach((dept) => {
       if (
         dept.departmentName.toLowerCase().includes(q) ||
-        (dept.description && dept.description.toLowerCase().includes(q)) ||
-        (dept.leadName && dept.leadName.toLowerCase().includes(q))
+        (dept.description && dept.description.toLowerCase().includes(q))
       ) {
         items.push({
           id: `dept-${dept.departmentId}`,
           categoryKey: 'catDepartments',
           title: dept.departmentName,
-          subtitle: `${t('gsLeadPrefix')} ${dept.leadName || t('unassigned')} • ${dept.headCount} ${t('gsPersonnelUnit')}`,
+          subtitle: `${dept.headCount} ${t('gsPersonnelUnit')}`,
           icon: Buildings,
-          badge: `$${(dept.budget || 0).toLocaleString()}`,
           badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
           onSelect: () => {
             setDepartmentsView('departments');
@@ -369,7 +367,7 @@ export const GlobalSearch: React.FC = () => {
             setIsOpen(true);
           }}
           onKeyDown={handleKeyDown}
-          className="w-full h-10 pl-9 pr-14 rounded-xl bg-white border border-slate-200 text-sm sm:text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 transition-colors shadow-2xs"
+          className="w-full h-10 pl-9 pr-14 rounded-xl bg-white border border-slate-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors shadow-2xs"
         />
 
         {searchQuery ? (
@@ -380,12 +378,12 @@ export const GlobalSearch: React.FC = () => {
               inputRef.current?.focus();
             }}
             aria-label={t('clearSearch')}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none cursor-pointer"
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors active:scale-[0.96] focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
           >
             <X weight="bold" className="w-3 h-3" />
           </button>
         ) : (
-          <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md bg-slate-100 text-[10px] font-mono text-slate-400 border border-slate-200 pointer-events-none">
+          <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded-md bg-slate-100 text-xs font-mono text-slate-400 border border-slate-200 pointer-events-none">
             /
           </kbd>
         )}
@@ -406,7 +404,7 @@ export const GlobalSearch: React.FC = () => {
               <p className="text-xs font-bold text-slate-800">
                 {t('gsNoResultsTitle', { query: searchQuery })}
               </p>
-              <p className="text-[11px] text-slate-400 mt-1 max-w-[260px] mx-auto">
+              <p className="text-xs text-slate-400 mt-1 max-w-[260px] mx-auto">
                 {t('gsNoResultsHint')}
               </p>
             </div>
@@ -414,7 +412,7 @@ export const GlobalSearch: React.FC = () => {
             <div className="space-y-3 p-1">
               {Object.entries(groupedResults).map(([category, entries]) => (
                 <div key={category} className="space-y-1">
-                  <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  <div className="px-2.5 py-1 text-xs font-semibold text-slate-400">
                     {category} ({entries.length})
                   </div>
                   <div className="space-y-0.5">
@@ -430,9 +428,9 @@ export const GlobalSearch: React.FC = () => {
                           aria-selected={isSelected}
                           onMouseEnter={() => setSelectedIndex(globalIdx)}
                           onClick={item.onSelect}
-                          className={`w-full flex items-center gap-3 p-2 rounded-xl text-left cursor-pointer transition-colors duration-100 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
+                          className={`w-full flex items-center gap-3 p-2 rounded-xl text-left cursor-pointer transition-colors duration-100 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none ${
                             isSelected
-                              ? 'bg-blue-50/80 text-blue-900 shadow-2xs'
+                              ? 'bg-brand-50/80 text-brand-900 shadow-2xs'
                               : 'text-slate-700 hover:bg-slate-50'
                           }`}
                         >
@@ -448,7 +446,7 @@ export const GlobalSearch: React.FC = () => {
                           ) : Icon ? (
                             <div
                               className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-2xs ${
-                                isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
+                                isSelected ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'
                               }`}
                             >
                               <Icon weight={isSelected ? 'fill' : 'bold'} className="w-4 h-4" />
@@ -464,7 +462,7 @@ export const GlobalSearch: React.FC = () => {
                             <div className="flex items-center justify-between gap-1.5">
                               <span
                                 className={`text-xs font-semibold truncate ${
-                                  isSelected ? 'text-blue-900 font-bold' : 'text-slate-900'
+                                  isSelected ? 'text-brand-900 font-bold' : 'text-slate-900'
                                 }`}
                               >
                                 {item.title}
@@ -479,7 +477,7 @@ export const GlobalSearch: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                            <p className="text-xs text-slate-400 truncate mt-0.5">
                               {item.subtitle}
                             </p>
                           </div>
@@ -487,7 +485,7 @@ export const GlobalSearch: React.FC = () => {
                           {/* Action Cue */}
                           <div
                             className={`opacity-0 shrink-0 text-slate-400 transition-opacity ${
-                              isSelected ? 'opacity-100 text-blue-600' : ''
+                              isSelected ? 'opacity-100 text-brand-600' : ''
                             }`}
                           >
                             <ArrowRight weight="bold" className="w-3.5 h-3.5" />
@@ -502,7 +500,7 @@ export const GlobalSearch: React.FC = () => {
           )}
 
           {/* Footer Keyboard Navigation Legend */}
-          <div className="mt-2 pt-2 px-3 pb-1 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+          <div className="mt-2 pt-2 px-3 pb-1 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400 font-mono">
             <div className="flex items-center gap-2">
               <span className="flex items-center gap-1">
                 <kbd className="px-1 py-0.5 rounded bg-slate-100 border border-slate-200">↑</kbd>

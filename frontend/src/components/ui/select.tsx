@@ -19,7 +19,7 @@ const SelectTrigger = React.forwardRef<
     ref={ref}
     type="button"
     className={cn(
-      "flex h-9 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 shadow-sm transition-[border-color,box-shadow] hover:border-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "flex h-9 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-800 shadow-sm transition-[border-color,box-shadow] hover:border-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       className
     )}
     {...props}
@@ -106,7 +106,7 @@ const SelectLabel = React.forwardRef<
   <SelectPrimitive.Label
     ref={ref}
     className={cn(
-      "py-1.5 pl-8 pr-2 text-[10px] font-bold uppercase tracking-wider text-slate-400",
+      "py-1.5 pl-8 pr-2 text-xs font-semibold text-slate-400",
       className
     )}
     {...props}
@@ -121,12 +121,12 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-3 text-xs text-slate-700 outline-none transition-colors hover:bg-slate-50 focus:bg-blue-50 focus:text-blue-700 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2 pl-8 pr-3 text-xs text-slate-700 outline-none transition-colors hover:bg-slate-50 focus:bg-brand-50 focus:text-brand-700 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
     )}
     {...props}
   >
-    <span className="absolute left-2.5 flex h-3.5 w-3.5 items-center justify-center text-blue-600">
+    <span className="absolute left-2.5 flex h-3.5 w-3.5 items-center justify-center text-brand-600">
       <SelectPrimitive.ItemIndicator>
         <Check weight="bold" className="h-3.5 w-3.5" />
       </SelectPrimitive.ItemIndicator>
