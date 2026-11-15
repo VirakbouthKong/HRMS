@@ -1,4 +1,4 @@
-param([string]$BaseUrl = 'http://localhost:8080', [PSCredential]$Credential)
+﻿param([string]$BaseUrl = 'http://localhost:8080', [PSCredential]$Credential)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Net.Http
 $client = New-Object System.Net.Http.HttpClient
@@ -26,7 +26,7 @@ function Check($name, $response, [int[]]$expected) {
     Write-Output (('{0} {1}: {2}' -f $(if($passed){'PASS'}else{'FAIL'}),$name,$response.Status))
 }
 function Resolve-Path($path) {
-    $values = @{id='2147483647';employeeId='2147483647';departmentId='2147483647';jobId='2147483647';attendanceId='2147483647';leaveId='2147483647';jobName='SmokeTestNonexistentJob';period='2026-11-01';attendanceDate='2026-11-05';status='ACTIVE';leaveType='ANNUAL'}
+    $values = @{id='2147483647';employeeId='2147483647';departmentId='2147483647';jobId='2147483647';attendanceId='2147483647';payrollId='2147483647';leaveId='2147483647';jobName='SmokeTestNonexistentJob';period='2026-11-01';attendanceDate='2026-11-05';status='ACTIVE';leaveType='ANNUAL'}
     foreach($key in $values.Keys) { $path = $path.Replace("{$key}",$values[$key]) }
     return $path
 }
