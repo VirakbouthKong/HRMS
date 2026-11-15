@@ -4,25 +4,26 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    /* Evergreen theme */
+    --background: 90 9% 96%;
+    --foreground: 154 19% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 154 19% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222 47% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222 47% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221 83% 53%;
+    --popover-foreground: 154 19% 11%;
+    --primary: 167 83% 26%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 100 9% 95%;
+    --secondary-foreground: 154 19% 11%;
+    --muted: 100 9% 95%;
+    --muted-foreground: 150 6% 40%;
+    --accent: 160 38% 95%;
+    --accent-foreground: 167 82% 22%;
+    --destructive: 349 51% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 96 9% 89%;
+    --input: 96 9% 89%;
+    --ring: 167 83% 26%;
     --radius: 0.75rem;
   }
 
@@ -34,8 +35,8 @@
 
   body {
     font-family: 'Inter', 'Kantumruy Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: #1e293b;
-    background: radial-gradient(circle at 10% 20%, rgba(216, 241, 250, 0.6) 0%, rgba(240, 244, 250, 0.7) 40%, rgba(235, 238, 255, 0.6) 80%);
+    color: #16201c;
+    background: #f5f6f4;
     min-height: 100vh;
   }
 
@@ -66,22 +67,24 @@
   a {
     touch-action: manipulation;
   }
+
+  /* Evergreen headings: Space Grotesk for Latin text; Khmer glyphs fall back to Kantumruy Pro. */
+  h1,
+  h2 {
+    font-family: 'Space Grotesk', 'Inter', 'Kantumruy Pro', system-ui, sans-serif;
+  }
 }
 
-/* Custom frosted card styling */
+/* Legacy card utility shares the workspace's lightweight surface. */
 .glass-card {
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.9);
-  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  background: #fff;
+  border: 1px solid #e3e6e1;
+  box-shadow: 0 1px 2px rgba(22, 32, 28, 0.04);
 }
 
 .glass-pill {
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  background: #fff;
+  border: 1px solid #e3e6e1;
 }
 
 /* Custom scrollbars */
@@ -93,11 +96,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #cdd2cb;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #98a29c;
 }
 
 /* Hide scrollbar utility */
@@ -107,6 +110,50 @@
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Shared workspace rhythm: readable data, quiet surfaces, visible keyboard focus. */
+.hrms-workspace table {
+  font-variant-numeric: tabular-nums;
+}
+.hrms-workspace thead th {
+  background: #f8f9f7;
+  color: #46524c;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  padding-top: 0.875rem;
+  padding-bottom: 0.875rem;
+}
+.hrms-workspace tbody td {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+.hrms-workspace tbody tr {
+  transition: background-color 120ms ease;
+}
+.hrms-workspace tbody tr:hover {
+  background-color: #f8f9f7;
+}
+.hrms-workspace button:disabled,
+.hrms-login button:disabled {
+  cursor: not-allowed;
+}
+.hrms-workspace :focus-visible,
+.hrms-login :focus-visible {
+  outline: 2px solid #0b7a62;
+  outline-offset: 3px;
+}
+.hrms-workspace main:focus-visible {
+  outline-offset: -3px;
+}
+@media (max-width: 639px) {
+  .hrms-workspace input,
+  .hrms-workspace select,
+  .hrms-workspace textarea,
+  .hrms-login input {
+    font-size: 16px;
+  }
 }
 
 /* GPU-Composited UI Animations (transform & opacity only) */
