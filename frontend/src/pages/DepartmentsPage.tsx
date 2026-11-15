@@ -23,6 +23,7 @@ import { useI18n } from '../i18n/useI18n';
 import { hasPermission } from '../utils/rbac';
 import { MetricCard } from '../components/dashboard/MetricCard';
 import { InitialsAvatar } from '../components/dashboard/DashboardCard';
+import { departmentApi, jobApi } from '../api';
 import { FilterTabs } from '../components/ui/filter-tabs';
 
 export const DepartmentsPage: React.FC = () => {
@@ -129,6 +130,36 @@ export const DepartmentsPage: React.FC = () => {
     setFormDesc(dept.description);
     setDeptFormError(null);
     setIsCreateModalOpen(true);
+    // Swap in the latest copy (GET /api/departments/{id}) so a newer edit isn't overwritten.
+    departmentApi
+      .getById(dept.departmentId)
+      .then((fresh: any) => {
+        if (fresh && fresh.departmentId === dept.departmentId) {
+          setFormName(fresh.departmentName ?? dept.departmentName);
+          setFormDesc(fresh.description ?? dept.description);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const openEditJob = (job: JobTitle) => {
+    setEditingJob(job);
+    setJobTitleInput(job.jobTitle);
+    setJobDeptIdInput(job.departmentId || departments[0]?.departmentId || 1);
+    setJobDescInput(job.description || '');
+    setJobError(null);
+    setIsJobModalOpen(true);
+    // Swap in the latest copy (GET /api/jobs/{id}).
+    jobApi
+      .getById(job.jobId)
+      .then((fresh: any) => {
+        if (fresh && fresh.jobId === job.jobId) {
+          setJobTitleInput(fresh.jobTitle ?? job.jobTitle);
+          setJobDeptIdInput(fresh.departmentId ?? job.departmentId ?? departments[0]?.departmentId ?? 1);
+          setJobDescInput(fresh.description ?? job.description ?? '');
+        }
+      })
+      .catch(() => {});
   };
 
   const handleSaveDepartment = async (e: React.FormEvent) => {
@@ -512,14 +543,7 @@ export const DepartmentsPage: React.FC = () => {
                             {canEditJobs && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setEditingJob(job);
-                                  setJobTitleInput(job.jobTitle);
-                                  setJobDeptIdInput(job.departmentId || departments[0]?.departmentId || 1);
-                                  setJobDescInput(job.description || '');
-                                  setJobError(null);
-                                  setIsJobModalOpen(true);
-                                }}
+                                onClick={() => openEditJob(job)}
                                 aria-label={t('jbEditAria', { name: job.jobTitle })}
                                 title={t('jbEditTitle')}
                                 className={`${iconBtn} hover:text-brand-700 hover:bg-brand-50`}

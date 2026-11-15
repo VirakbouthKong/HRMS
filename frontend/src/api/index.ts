@@ -283,6 +283,10 @@ export const accountApi = {
     const res = await apiClient.delete<AuthApiResponse>(`/api/accounts/${accountId}`);
     return res.data;
   },
+  getById: async (accountId: number): Promise<UserAccountSummary> => {
+    const res = await apiClient.get<UserAccountSummary>(`/api/accounts/${accountId}`);
+    return res.data;
+  },
 };
 
 /**
@@ -313,6 +317,46 @@ export const roleApi = {
   },
   remove: async (roleId: number): Promise<AuthApiResponse> => {
     const res = await apiClient.delete<AuthApiResponse>(`/api/roles/${roleId}`);
+    return res.data;
+  },
+  getById: async (roleId: number): Promise<RoleSummary> => {
+    const res = await apiClient.get<RoleSummary>(`/api/roles/${roleId}`);
+    return res.data;
+  },
+};
+
+// ==========================================
+// 1c. Gateway configuration
+// ==========================================
+
+/** The `frontend` section of config-repo/frontend.yml (public, no token). */
+export interface PublicConfig {
+  appName?: string;
+  features?: { photoUpload?: boolean; payroll?: boolean; reports?: boolean; [k: string]: boolean | undefined };
+  limits?: {
+    photoMaxBytes?: number;
+    photoTypes?: string;
+    passwordMinLength?: number;
+    otpValidMinutes?: number;
+    otpResendSeconds?: number;
+  };
+}
+
+export interface ConfigRefreshResult {
+  success: boolean;
+  message: string;
+  changed?: string[];
+}
+
+export const configApi = {
+  /** GET /api/public/config (no token needed). */
+  getPublic: async (): Promise<PublicConfig> => {
+    const res = await apiClient.get<PublicConfig>('/api/public/config');
+    return res.data;
+  },
+  /** POST /api/admin/config/refresh (ADMIN). Reloads gateway routes, access rules and frontend settings. */
+  refresh: async (): Promise<ConfigRefreshResult> => {
+    const res = await apiClient.post<ConfigRefreshResult>('/api/admin/config/refresh');
     return res.data;
   },
 };

@@ -15,7 +15,7 @@ import {
   WarningCircle,
   ClockCounterClockwise,
 } from '@phosphor-icons/react';
-import { useHrmsStore } from '../store/useHrmsStore';
+import { useHrmsStore, normalizeEmployee } from '../store/useHrmsStore';
 import { Employee } from '../types';
 import { BehavioralHistorySelect } from '../components/ui/behavioral-history-select';
 import { Modal } from '../components/ui/modal';
@@ -205,16 +205,14 @@ export const EmployeesPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleOpenEdit = (emp: Employee) => {
-    setEditingEmployee(emp);
-    setEditFormError(null);
+  const toEditForm = (emp: Employee): typeof editFormData => {
     const deptJobs = jobs.filter((j) => j.departmentId === emp.departmentId);
     const matchedJob =
       deptJobs.find(
         (j) => j.jobTitle.trim().toLowerCase() === (emp.jobTitle || '').trim().toLowerCase()
       ) || deptJobs[0];
     const upperStatus = (emp.status || '').toUpperCase().replace(/\s+/g, '_');
-    setEditFormData({
+    return {
       firstName: emp.firstName,
       lastName: emp.lastName,
       email: emp.email,
@@ -233,8 +231,26 @@ export const EmployeesPage: React.FC = () => {
           : upperStatus === 'PROBATION'
           ? 'Probation'
           : 'Active',
-    });
+    };
+  };
+
+  const handleOpenEdit = (emp: Employee) => {
+    setEditingEmployee(emp);
+    setEditFormError(null);
+    setEditFormData(toEditForm(emp));
     setIsEditModalOpen(true);
+
+    // Swap in the latest record (GET /api/employees/{id}); keep the salary already shown,
+    // which may come from the payroll profile below.
+    employeeApi
+      .getById(emp.employeeId)
+      .then((raw) => {
+        if (!raw) return;
+        const fresh = { ...emp, ...normalizeEmployee(raw) };
+        setEditingEmployee(fresh);
+        setEditFormData((prev) => ({ ...toEditForm(fresh), salary: prev.salary }));
+      })
+      .catch(() => {});
 
     if (canViewSalary) {
       payrollApi

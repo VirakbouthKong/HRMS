@@ -20,6 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useHrmsStore, NavTab } from '../../store/useHrmsStore';
 import { isRoleAllowedForTab } from '../../utils/rbac';
 import { useI18n, TranslationKey } from '../../i18n/useI18n';
+import { useAppConfig } from '../../lib/appConfig';
 
 interface SidebarProps {
   isCollapsed?: boolean;
@@ -41,6 +42,7 @@ interface NavGroup {
 export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
   const { activeTab, setActiveTab, currentUser, leaves, syncWithGateway, logout } = useHrmsStore();
   const { t, tRole } = useI18n();
+  const { features } = useAppConfig();
   const isEmployee = currentUser.role === 'ROLE_EMPLOYEE';
   const roleInfo = tRole(currentUser.role);
 
@@ -88,7 +90,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
     },
   ];
   const groups = allGroups
-    .map((g) => ({ ...g, items: g.items.filter((item) => isRoleAllowedForTab(currentUser.role, item.id)) }))
+    .map((g) => ({
+      ...g,
+      // Role rules first, then the gateway's feature switches (config-repo/frontend.yml).
+      items: g.items.filter(
+        (item) =>
+          isRoleAllowedForTab(currentUser.role, item.id) &&
+          (item.id !== 'payroll' || features.payroll) &&
+          (item.id !== 'reports' || features.reports)
+      ),
+    }))
     .filter((g) => g.items.length > 0);
 
   const initials = currentUser.fullName

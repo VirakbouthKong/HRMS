@@ -13,6 +13,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { LoginPage } from './pages/LoginPage';
 import { AccountsPage } from './pages/AccountsPage';
 import { isRoleAllowedForTab } from './utils/rbac';
+import { loadAppConfig, useAppConfig } from './lib/appConfig';
 import { LanguageSwitcher } from './components/ui/LanguageSwitcher';
 import { useHrmsStore, NavTab } from './store/useHrmsStore';
 import { useI18n, TranslationKey } from './i18n/useI18n';
@@ -39,6 +40,12 @@ export const App: React.FC = () => {
     syncWithGateway,
   } = useHrmsStore();
   const { t } = useI18n();
+  const { features } = useAppConfig();
+
+  // Frontend settings from the gateway (GET /api/public/config); no token needed.
+  useEffect(() => {
+    loadAppConfig();
+  }, []);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -201,9 +208,9 @@ export const App: React.FC = () => {
       case 'leaves':
         return <LeavesPage />;
       case 'payroll':
-        return <PayrollPage />;
+        return features.payroll ? <PayrollPage /> : <DashboardPage />;
       case 'reports':
-        return <ReportsPage />;
+        return features.reports ? <ReportsPage /> : <DashboardPage />;
       case 'profile':
         return <ProfilePage />;
       case 'accounts':

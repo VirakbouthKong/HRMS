@@ -26,10 +26,12 @@ import { authApi, TokenResponse } from '../api';
 import { Modal } from '../components/ui/modal';
 import { LanguageSwitcher } from '../components/ui/LanguageSwitcher';
 import { useI18n } from '../i18n/useI18n';
+import { useAppConfig } from '../lib/appConfig';
 
 export const LoginPage: React.FC = () => {
   const { login } = useHrmsStore();
   const { t } = useI18n();
+  const { limits } = useAppConfig();
 
   const [mode, setMode] = useState<'login' | 'otp' | 'reset'>('login');
   const [userName, setUserName] = useState('sysadmin');
@@ -263,8 +265,8 @@ export const LoginPage: React.FC = () => {
       setFirstLoginError(t('errEnterTempPwd'));
       return;
     }
-    if (!firstLoginNewPassword || firstLoginNewPassword.length < 8) {
-      setFirstLoginError(t('errMinPwdLen'));
+    if (!firstLoginNewPassword || firstLoginNewPassword.length < limits.passwordMinLength) {
+      setFirstLoginError(t('errMinPwdLen', { min: limits.passwordMinLength }));
       return;
     }
     if (firstLoginNewPassword === firstLoginCurrentPassword) {
@@ -700,7 +702,7 @@ export const LoginPage: React.FC = () => {
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder={t('newPasswordPlaceholder')}
                   required
-                  minLength={8}
+                  minLength={limits.passwordMinLength}
                   className="w-full px-3.5 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors"
                 />
               </div>
@@ -872,7 +874,7 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => setFirstLoginNewPassword(e.target.value)}
                 placeholder={t('newPasswordPlaceholder')}
                 required
-                minLength={8}
+                minLength={limits.passwordMinLength}
                 className="w-full pl-10 pr-10 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors text-slate-900"
               />
               <button
@@ -909,7 +911,7 @@ export const LoginPage: React.FC = () => {
                 onChange={(e) => setFirstLoginConfirmPassword(e.target.value)}
                 placeholder={t('reenterNewPasswordPlaceholder')}
                 required
-                minLength={8}
+                minLength={limits.passwordMinLength}
                 className="w-full pl-10 pr-3.5 py-3 text-[15px] bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30 focus-visible:border-brand-500 transition-colors text-slate-900"
               />
             </div>

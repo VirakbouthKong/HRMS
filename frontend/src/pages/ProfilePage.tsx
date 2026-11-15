@@ -21,11 +21,13 @@ import { DashboardCard, StatusChip } from '../components/dashboard/DashboardCard
 import { authApi, employeeApi, JobHistoryItem } from '../api';
 import { JobHistoryTimeline } from '../components/employees/JobHistoryTimeline';
 import { invalidateEmployeePhoto } from '../lib/employeePhotos';
+import { useAppConfig } from '../lib/appConfig';
 import { useI18n } from '../i18n/useI18n';
 
 export const ProfilePage: React.FC = () => {
   const { currentUser, logout, updateUserAvatar } = useHrmsStore();
   const { t, tRole } = useI18n();
+  const { features, limits } = useAppConfig();
   const [showTechnicalAuthorities, setShowTechnicalAuthorities] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -94,12 +96,12 @@ export const ProfilePage: React.FC = () => {
     setErrorMessage(null);
     setToastMessage(null);
 
-    if (file.size > 3 * 1024 * 1024) {
-      setErrorMessage(t('photoTooLargeErr'));
+    if (file.size > limits.photoMaxBytes) {
+      setErrorMessage(t('photoTooLargeErr', { mb: Math.round((limits.photoMaxBytes / 1024 / 1024) * 10) / 10 }));
       return;
     }
 
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    if (!limits.photoTypes.includes(file.type)) {
       setErrorMessage(t('photoUnsupportedErr'));
       return;
     }
@@ -180,6 +182,8 @@ export const ProfilePage: React.FC = () => {
                 {initials}
               </AvatarFallback>
             </Avatar>
+            {features.photoUpload && (
+            <>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -200,10 +204,12 @@ export const ProfilePage: React.FC = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/png, image/jpeg, image/webp"
+              accept={limits.photoTypes.join(', ')}
               onChange={handlePhotoUpload}
               className="hidden"
             />
+            </>
+            )}
           </div>
 
           <div className="min-w-0">
@@ -221,6 +227,8 @@ export const ProfilePage: React.FC = () => {
               <span className="text-slate-500 tabular-nums">
                 {t('accountIdPrefix')} #{currentUser.employeeId || currentUser.accountId || 1}
               </span>
+              {features.photoUpload && (
+              <>
               <span aria-hidden="true" className="text-slate-300">·</span>
               <button
                 type="button"
@@ -242,6 +250,8 @@ export const ProfilePage: React.FC = () => {
                     {t('removePhoto')}
                   </button>
                 </>
+              )}
+              </>
               )}
             </div>
           </div>

@@ -52,12 +52,25 @@ export const RolesPanel: React.FC<RolesPanelProps> = ({ roles, accounts, roleLab
     setDescription('');
     setFormError(null);
   };
+  /** Opens with the listed values, then swaps in the latest copy (GET /api/roles/{id}). */
   const openEdit = (role: RoleSummary) => {
     setMode('edit');
     setEditing(role);
     setCode(role.roleName);
     setDescription(role.description || '');
     setFormError(null);
+    roleApi
+      .getById(role.roleId)
+      .then((fresh) => {
+        if (fresh && fresh.roleId === role.roleId) {
+          setEditing(fresh);
+          setCode(fresh.roleName);
+          setDescription(fresh.description || '');
+        }
+      })
+      .catch(() => {
+        // Keep the listed values.
+      });
   };
 
   const save = async (e: React.FormEvent) => {

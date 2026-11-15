@@ -65,7 +65,8 @@ export const ReviewQueueCard: React.FC = () => {
       action.actionKind === 'correction'
         ? await reviewAttendanceCorrection(id, status)
         : await updateLeaveStatus(id, status);
-    if (!result.success) setError(result.error || t('dashActionFailed'));
+    if (!result.success)
+      setError(result.error === 'ALREADY_DECIDED' ? t('lvAlreadyDecided') : result.error || t('dashActionFailed'));
     setBusyId(null);
   };
 

@@ -23,6 +23,7 @@ import {
   parseDateKey,
 } from '../components/dashboard/DashboardCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
+import { attendanceApi } from '../api';
 import { useI18n } from '../i18n/useI18n';
 
 export const AttendancePage: React.FC = () => {
@@ -157,6 +158,20 @@ export const AttendancePage: React.FC = () => {
     setReqReason('');
     setCorrectionError(null);
     setIsCorrectionModalOpen(true);
+    if (!rec) return;
+    // Refresh the record (GET /api/attendance/{id}): the request is based on its current times,
+    // and the server refuses approval if they changed after the request was filed.
+    const hhmm = (v?: string | null) => (v ? (v.includes('T') ? v.split('T')[1] : v).substring(0, 5) : null);
+    attendanceApi
+      .getById(rec.attendanceId)
+      .then((raw: any) => {
+        if (!raw || raw.attendanceId !== rec.attendanceId) return;
+        const fresh = { ...rec, checkIn: hhmm(raw.checkIn), checkOut: hhmm(raw.checkOut), status: raw.status ?? rec.status };
+        setTargetRecordForCorrection(fresh);
+        setReqCheckIn(fresh.checkIn || '08:00');
+        setReqCheckOut(fresh.checkOut || '17:00');
+      })
+      .catch(() => {});
   };
 
   const reviewCorrection = async (correctionId: number, status: 'APPROVED' | 'REJECTED') => {

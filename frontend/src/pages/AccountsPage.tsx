@@ -24,6 +24,7 @@ import { Modal } from '../components/ui/modal';
 import { MetricCard } from '../components/dashboard/MetricCard';
 import { InitialsAvatar, StatusChip, localeFor } from '../components/dashboard/DashboardCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
+import { useAppConfig } from '../lib/appConfig';
 import { RolesPanel } from '../components/accounts/RolesPanel';
 
 const ROLE_LABELS: Record<string, TranslationKey> = {
@@ -66,6 +67,7 @@ const primaryBtn =
 export const AccountsPage: React.FC = () => {
   const { employees, departments, currentUser } = useHrmsStore();
   const { t, language } = useI18n();
+  const { limits } = useAppConfig();
 
   const [accounts, setAccounts] = useState<UserAccountSummary[]>([]);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
@@ -196,7 +198,7 @@ export const AccountsPage: React.FC = () => {
     setMode('create');
   };
 
-  const openEdit = (account: UserAccountSummary) => {
+  const fillEdit = (account: UserAccountSummary) => {
     setForm({
       departmentId: '',
       employeeId: account.employeeId ?? '',
@@ -207,8 +209,21 @@ export const AccountsPage: React.FC = () => {
       password: '',
     });
     setEditing(account);
+  };
+
+  /** Opens with the listed values, then swaps in the latest copy (GET /api/accounts/{id}). */
+  const openEdit = (account: UserAccountSummary) => {
+    fillEdit(account);
     setFormError(null);
     setMode('edit');
+    accountApi
+      .getById(account.accountId)
+      .then((fresh) => {
+        if (fresh && fresh.accountId === account.accountId) fillEdit(fresh);
+      })
+      .catch(() => {
+        // Keep the listed values; saving still goes through the server's checks.
+      });
   };
 
   const pickDepartment = (id: number) => {
@@ -245,8 +260,8 @@ export const AccountsPage: React.FC = () => {
       setFormError(t('acRequiredFields'));
       return;
     }
-    if (mode === 'create' && form.password.length < 8) {
-      setFormError(t('acPasswordTooShort'));
+    if (mode === 'create' && form.password.length < limits.passwordMinLength) {
+      setFormError(t('acPasswordTooShort', { min: limits.passwordMinLength }));
       return;
     }
 
@@ -667,7 +682,7 @@ export const AccountsPage: React.FC = () => {
                 </button>
               </div>
               <p id="acPasswordHint" className="mt-1 text-[13px] text-slate-500">
-                {t('acPasswordHint')}
+                {t('acPasswordHint', { min: limits.passwordMinLength })}
               </p>
             </div>
           )}

@@ -8,6 +8,7 @@ import {
   CurrencyDollar,
   ChartBar,
   WarningCircle,
+  ArrowsClockwise,
   IconProps,
 } from '@phosphor-icons/react';
 import { useHrmsStore } from '../store/useHrmsStore';
@@ -15,6 +16,8 @@ import { useI18n } from '../i18n/useI18n';
 import { JobExecution } from '../types';
 import { StatusChip, localeFor } from '../components/dashboard/DashboardCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
+import { configApi } from '../api';
+import { loadAppConfig, useAppConfig } from '../lib/appConfig';
 
 interface CronJobSpec {
   jobName: string;
@@ -70,6 +73,27 @@ export const AutomationsPage: React.FC = () => {
   const [jobFilter, setJobFilter] = useState<string>('ALL');
 
   const isAdmin = currentUser.role === 'ROLE_ADMIN' || currentUser.role === 'ROLE_HR';
+  // Reloading gateway configuration is ADMIN only (POST /api/admin/config/refresh).
+  const isSystemAdmin = currentUser.role === 'ROLE_ADMIN';
+  const { features } = useAppConfig();
+  const [isReloading, setIsReloading] = useState(false);
+  const [reloadResult, setReloadResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const reloadConfig = async () => {
+    setIsReloading(true);
+    setReloadResult(null);
+    try {
+      const res = await configApi.refresh();
+      await loadAppConfig();
+      const changed = res.changed?.length ? t('cfgChanged', { keys: res.changed.join(', ') }) : t('cfgNoChanges');
+      setReloadResult({ ok: res.success !== false, text: res.success === false ? res.message : `${t('cfgReloaded')} ${changed}` });
+    } catch (err: any) {
+      setReloadResult({ ok: false, text: err?.response?.data?.message || t('cfgFailed') });
+    } finally {
+      setIsReloading(false);
+    }
+  };
+  const onOff = (v: boolean) => (v ? t('cfgOn') : t('cfgOff'));
 
   const handleTrigger = async (jobName: string, title: string) => {
     setTriggeringJob(jobName);
@@ -169,6 +193,40 @@ export const AutomationsPage: React.FC = () => {
           <WarningCircle weight="fill" className="w-4 h-4 text-rose-600 shrink-0" />
           <span className="font-medium">{errorMessage}</span>
         </div>
+      )}
+
+      {/* Server configuration (ADMIN only) */}
+      {isSystemAdmin && (
+        <section className="bg-white rounded-xl border border-slate-200 p-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0 max-w-2xl">
+            <h2 className="text-base font-semibold text-slate-900">{t('cfgTitle')}</h2>
+            <p className="text-[13px] text-slate-500 mt-1">{t('cfgSub')}</p>
+            <p className="text-[13px] text-slate-600 mt-2">
+              {t('cfgFeatures', {
+                photo: onOff(features.photoUpload),
+                payroll: onOff(features.payroll),
+                reports: onOff(features.reports),
+              })}
+            </p>
+            {reloadResult && (
+              <p
+                role={reloadResult.ok ? 'status' : 'alert'}
+                className={`mt-2 text-[13px] font-medium ${reloadResult.ok ? 'text-brand-800' : 'text-rose-800'}`}
+              >
+                {reloadResult.text}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={reloadConfig}
+            disabled={isReloading}
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-lg border border-slate-200 bg-white text-slate-800 hover:bg-slate-50 text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none"
+          >
+            {isReloading ? <CircleNotch weight="bold" className="w-4 h-4 animate-spin" /> : <ArrowsClockwise weight="bold" className="w-4 h-4" />}
+            {t('cfgReload')}
+          </button>
+        </section>
       )}
 
       {/* 3. Scheduled jobs */}

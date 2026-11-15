@@ -114,7 +114,7 @@ export const LeavesPage: React.FC = () => {
     const res = await updateLeaveStatus(leaveId, status);
     setBusyLeaveId(null);
     if (!res.success && res.error) {
-      setPageError(res.error);
+      setPageError(res.error === 'ALREADY_DECIDED' ? t('lvAlreadyDecided') : res.error);
     }
   };
 

@@ -9,6 +9,7 @@ import {
   PendingAction,
   Announcement,
   UserAccount,
+  UserRole,
   JobExecution,
   AttendanceCorrection,
 } from '../types';
@@ -61,6 +62,14 @@ const getInitialLanguage = (): Language => {
   return 'en';
 };
 
+/** Same mapping as sign-in (LoginPage): server role name -> the app's three role groups. */
+const roleFromServer = (r?: string): UserRole => {
+  const upper = (r || '').toUpperCase();
+  if (upper.includes('ADMIN')) return 'ROLE_ADMIN';
+  if (upper.includes('HR')) return 'ROLE_HR';
+  return 'ROLE_EMPLOYEE';
+};
+
 /** The user as saved in localStorage: blob: photo URLs are per-page and must not be persisted. */
 const toStoredUser = (user: UserAccount): UserAccount =>
   user.avatarUrl?.startsWith('blob:') ? { ...user, avatarUrl: '' } : user;
@@ -82,7 +91,7 @@ const extractApiError = (err: any, fallback: string): string => {
   );
 };
 
-const normalizeEmployee = (e: any): Employee => ({
+export const normalizeEmployee = (e: any): Employee => ({
   employeeId: e.employeeId,
   firstName: e.firstName || '',
   lastName: e.lastName || '',
@@ -377,6 +386,36 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
       }
 
       set({ isLoading: true, gatewayError: null });
+
+      // Who am I, according to the server (GET /api/auth/me): a role/email/link change made by an
+      // admin applies at the next sync, and 401 means the account was deactivated or deleted.
+      try {
+        const me = await authApi.getMe();
+        if (me && me.userName) {
+          const cu = get().currentUser;
+          const role = roleFromServer(me.role);
+          const employeeId = me.employeeId ?? undefined;
+          if (
+            cu.role !== role ||
+            cu.email !== me.email ||
+            cu.userName !== me.userName ||
+            cu.employeeId !== employeeId ||
+            cu.accountId !== me.accountId
+          ) {
+            const updated = { ...cu, accountId: me.accountId, userName: me.userName, email: me.email, role, employeeId };
+            if (typeof localStorage !== 'undefined') {
+              localStorage.setItem('hrms_user', JSON.stringify(toStoredUser(updated)));
+            }
+            set({ currentUser: updated });
+          }
+        }
+      } catch (err: any) {
+        if (err?.response?.status === 401) {
+          get().logout();
+          return;
+        }
+        // Other failures: carry on; the requests below report gateway problems.
+      }
 
       try {
         const corrections = await attendanceRequestApi.getAll();
@@ -1302,6 +1341,16 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
     },
 
     updateLeaveStatus: async (leaveId, status) => {
+      // Re-read the request first (GET /api/leaves/{id}): another HR user may have decided it already.
+      try {
+        const latest = await leaveApi.getById(leaveId);
+        if (latest && String((latest as any).status || '').toUpperCase() !== 'PENDING') {
+          get().syncWithGateway();
+          return { success: false, error: 'ALREADY_DECIDED' };
+        }
+      } catch {
+        // Lookup failed: let the decision call below report any real problem.
+      }
       try {
         if (status === 'APPROVED') {
           await leaveApi.approve(leaveId);
