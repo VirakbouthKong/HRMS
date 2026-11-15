@@ -156,7 +156,7 @@ export const EmployeesPage: React.FC = () => {
       phoneNumber: '',
       gender: 'Male',
       dob: '1995-01-01',
-      salary: defaultJob?.minSalary || 2000,
+      salary: 2000,
       departmentId: defaultDeptId,
       jobTitle: defaultJob?.jobTitle || '',
       jobId: defaultJob?.jobId || 1,
@@ -223,7 +223,7 @@ export const EmployeesPage: React.FC = () => {
       departmentId: emp.departmentId,
       jobTitle: matchedJob?.jobTitle || emp.jobTitle,
       jobId: matchedJob?.jobId || jobs[0]?.jobId || 1,
-      salary: emp.salary || matchedJob?.minSalary || 0,
+      salary: emp.salary || 0,
       status:
         upperStatus === 'ON_LEAVE'
           ? 'On Leave'
@@ -778,19 +778,6 @@ export const EmployeesPage: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, salary: Number(e.target.value) })}
                 className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
-              {(() => {
-                const selectedJob =
-                  departmentJobs.find((j) => j.jobTitle === formData.jobTitle) || departmentJobs[0];
-                if (selectedJob?.minSalary && selectedJob?.maxSalary) {
-                  return (
-                    <p className="text-xs text-slate-400 mt-1 font-mono">
-                      {t('approvedBandLabel')} ${selectedJob.minSalary.toLocaleString()} – $
-                      {selectedJob.maxSalary.toLocaleString()}
-                    </p>
-                  );
-                }
-                return null;
-              })()}
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-800 mb-1.5">
@@ -988,20 +975,6 @@ export const EmployeesPage: React.FC = () => {
                 onChange={(e) => setEditFormData({ ...editFormData, salary: Number(e.target.value) })}
                 className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-800 focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
               />
-              {(() => {
-                const currentJob =
-                  editDepartmentJobs.find((j) => j.jobTitle === editFormData.jobTitle) ||
-                  editDepartmentJobs[0];
-                if (currentJob?.minSalary && currentJob?.maxSalary) {
-                  return (
-                    <p className="text-xs text-slate-400 mt-1 font-mono">
-                      {t('approvedBandLabel')} ${currentJob.minSalary.toLocaleString()} – $
-                      {currentJob.maxSalary.toLocaleString()}
-                    </p>
-                  );
-                }
-                return null;
-              })()}
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-800 mb-1.5">

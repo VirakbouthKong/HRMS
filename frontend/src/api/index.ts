@@ -74,8 +74,6 @@ export interface JobTitle {
   jobId: number;
   jobTitle: string;
   description?: string;
-  minSalary?: number;
-  maxSalary?: number;
   departmentId?: number;
   departmentName?: string;
 }

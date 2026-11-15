@@ -68,8 +68,6 @@ export const DepartmentsPage: React.FC = () => {
   const [isJobModalOpen, setIsJobModalOpen] = useState(false);
   const [jobTitleInput, setJobTitleInput] = useState('');
   const [jobDeptIdInput, setJobDeptIdInput] = useState<number>(1);
-  const [jobMinSalaryInput, setJobMinSalaryInput] = useState('1800');
-  const [jobMaxSalaryInput, setJobMaxSalaryInput] = useState('3200');
   const [jobDescInput, setJobDescInput] = useState('');
   const [jobError, setJobError] = useState<string | null>(null);
   // Set when the job dialog edits an existing job instead of adding one.
@@ -186,12 +184,6 @@ export const DepartmentsPage: React.FC = () => {
       setJobError(t('enterJobTitleError'));
       return;
     }
-    const minVal = jobMinSalaryInput ? Number(jobMinSalaryInput) : undefined;
-    const maxVal = jobMaxSalaryInput ? Number(jobMaxSalaryInput) : undefined;
-    if (minVal !== undefined && maxVal !== undefined && minVal > maxVal) {
-      setJobError(t('invalidSalaryBandErr'));
-      return;
-    }
 
     const dept = departments.find((d) => d.departmentId === Number(jobDeptIdInput));
 
@@ -219,8 +211,6 @@ export const DepartmentsPage: React.FC = () => {
       jobTitle: jobTitleInput.trim(),
       departmentId: Number(jobDeptIdInput),
       departmentName: dept?.departmentName || '',
-      minSalary: Number(jobMinSalaryInput) || undefined,
-      maxSalary: Number(jobMaxSalaryInput) || undefined,
       description: jobDescInput.trim() || undefined,
     });
     setIsSubmitting(false);
@@ -316,8 +306,6 @@ export const DepartmentsPage: React.FC = () => {
               onClick={() => {
                 setJobTitleInput('');
                 setJobDescInput('');
-                setJobMinSalaryInput('1800');
-                setJobMaxSalaryInput('3200');
                 setJobDeptIdInput(departments[0]?.departmentId || 1);
                 setJobError(null);
                 setEditingJob(null);
@@ -487,7 +475,6 @@ export const DepartmentsPage: React.FC = () => {
                 <tr className="bg-slate-50 text-xs font-semibold text-slate-600 border-b border-slate-200">
                   <th scope="col" className="py-3 px-5">{t('colJobTitle')}</th>
                   <th scope="col" className="py-3 px-5">{t('colDepartment')}</th>
-                  <th scope="col" className="py-3 px-5 text-right">{t('colSalaryBand')}</th>
                   <th scope="col" className="py-3 px-5 text-right">{t('colAssignedStaff')}</th>
                   {isManager && (
                     <th scope="col" className="py-3 px-5 text-right">
@@ -499,7 +486,7 @@ export const DepartmentsPage: React.FC = () => {
               <tbody className="divide-y divide-slate-100 text-sm text-slate-700 tabular-nums">
                 {filteredJobs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-10 px-5 text-center text-slate-500">
+                    <td colSpan={4} className="py-10 px-5 text-center text-slate-500">
                       {t('noJobsMatch')}
                     </td>
                   </tr>
@@ -515,11 +502,6 @@ export const DepartmentsPage: React.FC = () => {
                       <tr key={job.jobId}>
                         <td className="py-3.5 px-5 font-semibold text-slate-900">{job.jobTitle}</td>
                         <td className="py-3.5 px-5 text-slate-600">{job.departmentName || dept?.departmentName || '—'}</td>
-                        <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                          {job.minSalary && job.maxSalary
-                            ? `$${job.minSalary.toLocaleString()} – $${job.maxSalary.toLocaleString()}`
-                            : <span className="text-slate-500">{t('standardBand')}</span>}
-                        </td>
                         <td className="py-3.5 px-5 text-right">
                           {assignedStaff.length}{' '}
                           {assignedStaff.length === 1 ? t('employeeSingular') : t('employeePlural')}
@@ -746,36 +728,6 @@ export const DepartmentsPage: React.FC = () => {
             />
           </div>
 
-          {!editingJob && (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="jobMinSalary" className="block text-sm font-semibold text-slate-800 mb-1.5">
-                {t('minBaseSalaryLabel')}
-              </label>
-              <input
-                id="jobMinSalary"
-                type="number"
-                value={jobMinSalaryInput}
-                onChange={(e) => setJobMinSalaryInput(e.target.value)}
-                placeholder="1500"
-                className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
-              />
-            </div>
-            <div>
-              <label htmlFor="jobMaxSalary" className="block text-sm font-semibold text-slate-800 mb-1.5">
-                {t('maxBaseSalaryLabel')}
-              </label>
-              <input
-                id="jobMaxSalary"
-                type="number"
-                value={jobMaxSalaryInput}
-                onChange={(e) => setJobMaxSalaryInput(e.target.value)}
-                placeholder="3000"
-                className="w-full px-3 py-2 text-sm font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/30"
-              />
-            </div>
-          </div>
-          )}
 
           <div>
             <label htmlFor="jobDescInput" className="block text-sm font-semibold text-slate-800 mb-1.5">

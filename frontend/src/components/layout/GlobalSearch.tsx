@@ -249,11 +249,7 @@ export const GlobalSearch: React.FC = () => {
           id: `job-${job.jobId}`,
           categoryKey: 'catJobs',
           title: job.jobTitle,
-          subtitle: `${job.departmentName || ''}${
-            job.minSalary && job.maxSalary
-              ? ` • $${job.minSalary.toLocaleString()} – $${job.maxSalary.toLocaleString()}`
-              : ''
-          }`,
+          subtitle: job.departmentName || '',
           icon: Briefcase,
           badge: t('badgePosition'),
           badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',

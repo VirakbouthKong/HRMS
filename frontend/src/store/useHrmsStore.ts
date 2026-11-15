@@ -705,9 +705,6 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
               (j) =>
                 j.jobTitle.trim().toLowerCase() === (emp.jobTitle || '').trim().toLowerCase()
             );
-          if (matchedJob?.minSalary && matchedJob.minSalary > 0 && (!emp.salary || emp.salary <= 0)) {
-            return { ...emp, salary: matchedJob.minSalary };
-          }
           return emp;
         });
 
@@ -897,8 +894,6 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
           jobTitle: res.jobTitle,
           departmentId: res.departmentId,
           departmentName: res.departmentName || dept?.departmentName || '',
-          minSalary: jobData.minSalary,
-          maxSalary: jobData.maxSalary,
           description: res.description,
         };
         set((s) => ({ jobs: [...s.jobs, created] }));
