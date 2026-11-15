@@ -20,6 +20,7 @@ import { Department, JobTitle } from '../types';
 import { BehavioralHistorySelect } from '../components/ui/behavioral-history-select';
 import { Modal, Drawer } from '../components/ui/modal';
 import { useI18n } from '../i18n/useI18n';
+import { hasPermission } from '../utils/rbac';
 import { MetricCard } from '../components/dashboard/MetricCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
 
@@ -33,6 +34,7 @@ export const DepartmentsPage: React.FC = () => {
     deleteDepartment,
     addJobTitle,
     deleteJobTitle,
+    updateJobTitle,
     departmentsView: activeView,
     setDepartmentsView: setActiveView,
     currentUser,
@@ -70,6 +72,9 @@ export const DepartmentsPage: React.FC = () => {
   const [jobMaxSalaryInput, setJobMaxSalaryInput] = useState('3200');
   const [jobDescInput, setJobDescInput] = useState('');
   const [jobError, setJobError] = useState<string | null>(null);
+  // Set when the job dialog edits an existing job instead of adding one.
+  const [editingJob, setEditingJob] = useState<JobTitle | null>(null);
+  const canEditJobs = hasPermission(currentUser.role, 'JOB_TITLE_EDIT');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const isManager = currentUser.role === 'ROLE_ADMIN' || currentUser.role === 'ROLE_HR';
@@ -189,6 +194,26 @@ export const DepartmentsPage: React.FC = () => {
     }
 
     const dept = departments.find((d) => d.departmentId === Number(jobDeptIdInput));
+
+    if (editingJob) {
+      setIsSubmitting(true);
+      const res = await updateJobTitle(editingJob.jobId, {
+        jobTitle: jobTitleInput.trim(),
+        departmentId: Number(jobDeptIdInput),
+        description: jobDescInput.trim() || undefined,
+      });
+      setIsSubmitting(false);
+      if (res.success) {
+        setIsJobModalOpen(false);
+        setEditingJob(null);
+        setToastMessage(t('jbUpdatedToast', { title: jobTitleInput.trim() }));
+        setTimeout(() => setToastMessage(null), 4000);
+      } else {
+        setJobError(res.error === 'FORBIDDEN' ? t('jbNoPermission') : res.error || 'Failed to update job title');
+      }
+      return;
+    }
+
     setIsSubmitting(true);
     const result = await addJobTitle({
       jobTitle: jobTitleInput.trim(),
@@ -295,6 +320,7 @@ export const DepartmentsPage: React.FC = () => {
                 setJobMaxSalaryInput('3200');
                 setJobDeptIdInput(departments[0]?.departmentId || 1);
                 setJobError(null);
+                setEditingJob(null);
                 setIsJobModalOpen(true);
               }}
               className={primaryBtn}
@@ -499,7 +525,25 @@ export const DepartmentsPage: React.FC = () => {
                           {assignedStaff.length === 1 ? t('employeeSingular') : t('employeePlural')}
                         </td>
                         {isManager && (
-                          <td className="py-3.5 px-5 text-right">
+                          <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                            {canEditJobs && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingJob(job);
+                                  setJobTitleInput(job.jobTitle);
+                                  setJobDeptIdInput(job.departmentId || departments[0]?.departmentId || 1);
+                                  setJobDescInput(job.description || '');
+                                  setJobError(null);
+                                  setIsJobModalOpen(true);
+                                }}
+                                aria-label={t('jbEditAria', { name: job.jobTitle })}
+                                title={t('jbEditTitle')}
+                                className={`${iconBtn} hover:text-brand-700 hover:bg-brand-50`}
+                              >
+                                <PencilSimple weight="bold" className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => setConfirmDeleteJob(job)}
@@ -651,9 +695,12 @@ export const DepartmentsPage: React.FC = () => {
       {/* Modal: Add Job Title */}
       <Modal
         isOpen={isJobModalOpen}
-        onClose={() => setIsJobModalOpen(false)}
-        title={t('addJobModalTitle')}
-        subtitle={t('addJobModalSub')}
+        onClose={() => {
+          setIsJobModalOpen(false);
+          setEditingJob(null);
+        }}
+        title={editingJob ? t('jbEditTitle') : t('addJobModalTitle')}
+        subtitle={editingJob ? t('jbEditSub') : t('addJobModalSub')}
         maxWidth="md"
       >
         <form onSubmit={handleSaveJob} className="space-y-3.5">
@@ -699,6 +746,7 @@ export const DepartmentsPage: React.FC = () => {
             />
           </div>
 
+          {!editingJob && (
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="jobMinSalary" className="block text-sm font-semibold text-slate-800 mb-1.5">
@@ -727,6 +775,7 @@ export const DepartmentsPage: React.FC = () => {
               />
             </div>
           </div>
+          )}
 
           <div>
             <label htmlFor="jobDescInput" className="block text-sm font-semibold text-slate-800 mb-1.5">
@@ -761,7 +810,7 @@ export const DepartmentsPage: React.FC = () => {
                   <span>{t('saving')}</span>
                 </>
               ) : (
-                <span>{t('saveJobTitle')}</span>
+                <span>{editingJob ? t('acSave') : t('saveJobTitle')}</span>
               )}
             </button>
           </div>

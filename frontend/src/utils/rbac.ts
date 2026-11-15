@@ -8,6 +8,8 @@ export type Permission =
   | 'EMPLOYEE_CREATE'
   | 'EMPLOYEE_EDIT'
   | 'EMPLOYEE_DELETE'
+  | 'EMPLOYEE_JOB_HISTORY'
+  | 'JOB_TITLE_EDIT'
   // Attendance & Punch
   | 'ATTENDANCE_PUNCH'
   | 'ATTENDANCE_VIEW_OWN'
@@ -36,6 +38,8 @@ export type Permission =
  */
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ROLE_ADMIN: [
+    'EMPLOYEE_JOB_HISTORY',
+    'JOB_TITLE_EDIT',
     'EMPLOYEE_VIEW_DIRECTORY',
     'EMPLOYEE_VIEW_SALARY',
     'EMPLOYEE_CREATE',
@@ -60,6 +64,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
 
   ROLE_HR: [
+    'EMPLOYEE_JOB_HISTORY',
+    'JOB_TITLE_EDIT',
     'EMPLOYEE_VIEW_DIRECTORY',
     'EMPLOYEE_VIEW_SALARY',
     'EMPLOYEE_CREATE',

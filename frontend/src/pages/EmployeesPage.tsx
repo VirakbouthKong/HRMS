@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   CircleNotch,
   WarningCircle,
+  ClockCounterClockwise,
 } from '@phosphor-icons/react';
 import { useHrmsStore } from '../store/useHrmsStore';
 import { Employee } from '../types';
@@ -20,7 +21,7 @@ import { BehavioralHistorySelect } from '../components/ui/behavioral-history-sel
 import { Modal } from '../components/ui/modal';
 import { hasPermission } from '../utils/rbac';
 import { useI18n } from '../i18n/useI18n';
-import { payrollApi } from '../api';
+import { payrollApi, employeeApi, JobHistoryItem } from '../api';
 import { MetricCard } from '../components/dashboard/MetricCard';
 import { StatusChip, localeFor, parseDateKey, toDateKey } from '../components/dashboard/DashboardCard';
 import { FilterTabs } from '../components/ui/filter-tabs';
@@ -41,6 +42,10 @@ export const EmployeesPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState(searchQuery);
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
   const [statusTab, setStatusTab] = useState<'ACTIVE' | 'ON_LEAVE' | 'FORMER' | 'ALL'>('ACTIVE');
+  const [historyFor, setHistoryFor] = useState<Employee | null>(null);
+  const [history, setHistory] = useState<JobHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editFormError, setEditFormError] = useState<string | null>(null);
@@ -302,6 +307,24 @@ export const EmployeesPage: React.FC = () => {
   const canEdit = hasPermission(currentUser.role, 'EMPLOYEE_EDIT');
   const canViewSalary = hasPermission(currentUser.role, 'EMPLOYEE_VIEW_SALARY');
   const canDelete = hasPermission(currentUser.role, 'EMPLOYEE_DELETE');
+  // Job history is HR/admin only (backend: ADMIN, HR_MANAGER, HR_STAFF); employees never see it.
+  const canViewHistory = hasPermission(currentUser.role, 'EMPLOYEE_JOB_HISTORY');
+  const showActions = canEdit || canDelete || canViewHistory;
+
+  const openHistory = async (emp: Employee) => {
+    setHistoryFor(emp);
+    setHistory([]);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    try {
+      const items = await employeeApi.getJobHistory(emp.employeeId);
+      setHistory(Array.isArray(items) ? items : []);
+    } catch (err: any) {
+      setHistoryError(err?.response?.status === 403 ? t('jhNoPermission') : t('jhLoadFailed'));
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
 
   return (
@@ -456,7 +479,7 @@ export const EmployeesPage: React.FC = () => {
                 <th className="py-3 px-6">{canViewSalary ? t('colSalary') : t('colCompensation')}</th>
                 <th className="py-3 px-6">{t('colStatus')}</th>
                 <th className="py-3 px-6">{t('colHireDate')}</th>
-                {(canEdit || canDelete) && <th className="py-3 px-6 text-right">{t('colActions')}</th>}
+                {showActions && <th className="py-3 px-6 text-right">{t('colActions')}</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
@@ -519,9 +542,20 @@ export const EmployeesPage: React.FC = () => {
                         </div>
                       )}
                     </td>
-                    {(canEdit || canDelete) && (
+                    {showActions && (
                       <td className="py-3.5 px-6 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {canViewHistory && (
+                            <button
+                              type="button"
+                              onClick={() => openHistory(emp)}
+                              aria-label={t('jhOpenAria', { name: `${emp.firstName} ${emp.lastName}` })}
+                              title={t('jhTitle')}
+                              className="w-9 h-9 rounded-lg text-slate-500 hover:text-brand-700 hover:bg-brand-50 transition-colors inline-flex items-center justify-center focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:outline-none cursor-pointer"
+                            >
+                              <ClockCounterClockwise weight="bold" className="w-4 h-4" />
+                            </button>
+                          )}
                           {canEdit && (
                             <button
                               type="button"
@@ -554,6 +588,52 @@ export const EmployeesPage: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Job history (Admin/HR only) */}
+      <Modal
+        isOpen={!!historyFor}
+        onClose={() => setHistoryFor(null)}
+        title={t('jhTitle')}
+        subtitle={historyFor ? t('jhSub', { name: `${historyFor.firstName} ${historyFor.lastName}` }) : undefined}
+        maxWidth="lg"
+      >
+        {historyLoading ? (
+          <div className="py-10 text-center text-slate-500">
+            <CircleNotch weight="bold" className="inline w-5 h-5 animate-spin" aria-label="Loading" />
+          </div>
+        ) : historyError ? (
+          <p role="alert" className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-sm text-rose-800">
+            {historyError}
+          </p>
+        ) : history.length === 0 ? (
+          <p className="py-8 text-center text-sm text-slate-500">{t('jhEmpty')}</p>
+        ) : (
+          <ol className="relative flex flex-col gap-5 pl-6 before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-px before:bg-slate-200">
+            {history.map((h, i) => {
+              const current = !h.endDate;
+              return (
+                <li key={`${h.jobTitle}-${h.startedDate}-${i}`} className="relative">
+                  <span
+                    aria-hidden="true"
+                    className={`absolute -left-6 top-1 w-[15px] h-[15px] rounded-full border-2 border-white ${
+                      current ? 'bg-brand-600' : 'bg-slate-300'
+                    }`}
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-slate-900">{h.jobTitle}</span>
+                    {current && <StatusChip tone="ok">{t('jhCurrent')}</StatusChip>}
+                  </div>
+                  <div className="text-[13px] text-slate-600 mt-0.5">{h.departmentName}</div>
+                  <div className="text-[13px] text-slate-500 mt-0.5 tabular-nums">
+                    {fmtDate(h.startedDate)} – {h.endDate ? fmtDate(h.endDate) : t('jhPresent')}
+                  </div>
+                  {h.remark && <p className="text-[13px] text-slate-600 mt-1">{h.remark}</p>}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </Modal>
 
       {/* 4. Add Employee Modal */}
       <Modal

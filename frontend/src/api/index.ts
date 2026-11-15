@@ -80,13 +80,13 @@ export interface JobTitle {
   departmentName?: string;
 }
 
+/** Matches operation-service JobHistoryResponse. Newest first; the current job has no endDate. */
 export interface JobHistoryItem {
-  historyId?: number;
-  employeeId: number;
   jobTitle: string;
   departmentName: string;
-  startDate: string;
+  startedDate: string;
   endDate?: string | null;
+  remark?: string | null;
 }
 
 export interface AttendanceCorrectionPayload {

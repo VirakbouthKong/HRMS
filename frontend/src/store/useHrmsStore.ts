@@ -180,6 +180,10 @@ interface HrmsState {
   // Job Title Operations
   addJobTitle: (job: Omit<JobTitle, 'jobId'>) => Promise<ActionResult<JobTitle>>;
   deleteJobTitle: (id: number) => Promise<ActionResult>;
+  updateJobTitle: (
+    id: number,
+    job: { jobTitle: string; description?: string; departmentId: number }
+  ) => Promise<ActionResult<JobTitle>>;
 
   // Cron Operations
   triggerCronJob: (jobName: string) => Promise<ActionResult>;
@@ -901,6 +905,39 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
         return { success: true, data: created };
       } catch (err: any) {
         return { success: false, error: extractApiError(err, 'Failed to create job title.') };
+      }
+    },
+
+    updateJobTitle: async (id, jobData) => {
+      try {
+        const res = await jobApi.update(id, {
+          jobTitle: jobData.jobTitle.trim(),
+          description: jobData.description,
+          departmentId: jobData.departmentId,
+        });
+        const dept = get().departments.find((d) => d.departmentId === (res.departmentId ?? jobData.departmentId));
+        let updated: JobTitle | undefined;
+        set((s) => ({
+          jobs: s.jobs.map((j) => {
+            if (j.jobId !== id) return j;
+            updated = {
+              ...j,
+              jobTitle: res.jobTitle ?? jobData.jobTitle.trim(),
+              description: res.description ?? jobData.description,
+              departmentId: res.departmentId ?? jobData.departmentId,
+              departmentName: res.departmentName || dept?.departmentName || j.departmentName,
+            };
+            return updated;
+          }),
+        }));
+        // Employees carry the job title as text; refresh so every screen shows the new name.
+        get().syncWithGateway();
+        return { success: true, data: updated };
+      } catch (err: any) {
+        if (err?.response?.status === 403) {
+          return { success: false, error: 'FORBIDDEN' };
+        }
+        return { success: false, error: extractApiError(err, 'Failed to update job title.') };
       }
     },
 
