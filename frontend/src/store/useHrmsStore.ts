@@ -18,6 +18,7 @@ import {
   departmentApi,
   jobApi,
   attendanceApi,
+  attendanceRequestApi,
   leaveApi,
   payrollApi,
   cronApi,
@@ -363,6 +364,16 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
       set({ isLoading: true, gatewayError: null });
 
       try {
+        const corrections = await attendanceRequestApi.getAll();
+        const correctionActions: PendingAction[] = corrections.filter(c => c.status === 'PENDING').map(c => ({
+          id: 'corr-' + c.correctionId, code: 'HR-CORR-' + c.correctionId,
+          title: 'Attendance correction', employeeName: c.employeeName,
+          badgeText: 'Pending', badgeType: 'info', lastUpdated: c.requestedAt,
+          actionText: 'Inspect Log', actionKind: 'correction',
+          requestedCheckIn: c.requestedCheckIn, requestedCheckOut: c.requestedCheckOut,
+        }));
+        set(state => ({ attendanceCorrections: corrections, pendingActions: [...state.pendingActions.filter(a => a.actionKind !== 'correction'), ...correctionActions] }));
+
         const currentPeriod = new Date().toISOString().substring(0, 7);
         const role = get().currentUser.role;
         const isEmployeeOnly = role === 'ROLE_EMPLOYEE';
@@ -587,16 +598,16 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
           deptResult.status === 'fulfilled' && Array.isArray(deptResult.value)
             ? deptResult.value.map((d: any) => {
                 const assigned = employees.filter((e) => e.departmentId === d.departmentId);
-                const lead = assigned[0];
                 return {
                   departmentId: d.departmentId,
                   departmentName: d.departmentName,
                   description: d.description || '',
                   headCount: d.headCount ?? assigned.length,
-                  budget: d.budget ?? 50000,
-                  leadEmployeeId: d.leadEmployeeId ?? lead?.employeeId,
-                  leadName: d.leadName ?? (lead ? `${lead.firstName} ${lead.lastName}` : undefined),
-                  leadAvatar: d.leadAvatar ?? lead?.avatarUrl,
+                  // The department API has no budget or lead fields; never invent them.
+                  budget: d.budget ?? undefined,
+                  leadEmployeeId: d.leadEmployeeId,
+                  leadName: d.leadName,
+                  leadAvatar: d.leadAvatar,
                 };
               })
             : [];
@@ -777,6 +788,7 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
           }
         });
       } catch (err: any) {
+        if (err?.response?.status === 401) { get().logout(); return; }
         set({
           isLoading: false,
           isGatewayConnected: false,
@@ -805,7 +817,7 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
           leadEmployeeId: deptData.leadEmployeeId,
           leadName: deptData.leadName,
           leadAvatar: deptData.leadAvatar,
-          budget: deptData.budget || 50000,
+          budget: deptData.budget || undefined,
         };
         set((state) => ({ departments: [...state.departments, newDept] }));
         return { success: true, data: newDept };
@@ -933,148 +945,41 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
     // ==========================================
     requestAttendanceCorrection: async (reqData) => {
       try {
-        const formatIso = (dateStr: string, timeStr: string) => {
-          const t = timeStr.trim();
-          if (t.includes('T')) return t;
-          const ampmMatch = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-          if (ampmMatch) {
-            let h = parseInt(ampmMatch[1], 10);
-            const m = ampmMatch[2];
-            const mer = ampmMatch[3]?.toUpperCase();
-            if (mer === 'PM' && h < 12) h += 12;
-            if (mer === 'AM' && h === 12) h = 0;
-            return `${dateStr}T${String(h).padStart(2, '0')}:${m}:00`;
-          }
-          return `${dateStr}T08:00:00`;
+        const iso = (value: string) => {
+          if (value.includes('T')) return value;
+          const match = value.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+          if (!match) throw new Error('Enter a valid time.');
+          let hour = Number(match[1]);
+          if (match[3]?.toUpperCase() === 'PM' && hour < 12) hour += 12;
+          if (match[3]?.toUpperCase() === 'AM' && hour === 12) hour = 0;
+          if (hour > 23 || Number(match[2]) > 59) throw new Error('Enter a valid time.');
+          return reqData.attendanceDate + 'T' + String(hour).padStart(2, '0') + ':' + match[2] + ':00';
         };
-
-        const role = get().currentUser.role;
-        if (
-          (role === 'ROLE_ADMIN' || role === 'ROLE_HR') &&
-          reqData.attendanceId &&
-          Number(reqData.attendanceId) < 1000000000
-        ) {
-          await attendanceApi
-            .requestCorrection(reqData.attendanceId, {
-              checkIn: formatIso(reqData.attendanceDate, reqData.requestedCheckIn),
-              checkOut: reqData.requestedCheckOut
-                ? formatIso(reqData.attendanceDate, reqData.requestedCheckOut)
-                : undefined,
-              status: 'PRESENT',
-              lateMinutes: 0,
-              reason: reqData.reason,
-            })
-            .catch(() => {});
-        }
-
-        const newCorrection: AttendanceCorrection = {
-          ...reqData,
-          correctionId: Date.now(),
-          status: 'PENDING',
-          requestedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        };
-
-        const newAction: PendingAction = {
-          id: `corr-${newCorrection.correctionId}`,
-          code: `HR-CORR-${String(newCorrection.correctionId).slice(-4)}`,
-          title: `Biometric Punch Dispute (${reqData.requestedCheckIn} / ${reqData.requestedCheckOut})`,
-          employeeName: reqData.employeeName,
-          badgeText: 'Dispute Pending',
-          badgeType: 'info',
-          lastUpdated: 'Just now',
-          actionText: 'Inspect Log',
-          actionKind: 'correction',
-          requestedCheckIn: reqData.requestedCheckIn,
-          requestedCheckOut: reqData.requestedCheckOut,
-        };
-
-        set((state) => ({
-          attendanceCorrections: [newCorrection, ...state.attendanceCorrections],
-          pendingActions: [newAction, ...state.pendingActions],
-        }));
-
-        return { success: true, data: newCorrection };
+        const correction = await attendanceRequestApi.submit({
+          attendanceId: reqData.attendanceId,
+          checkIn: iso(reqData.requestedCheckIn),
+          checkOut: reqData.requestedCheckOut ? iso(reqData.requestedCheckOut) : undefined,
+          reason: reqData.reason,
+        });
+        set(state => ({ attendanceCorrections: [correction, ...state.attendanceCorrections] }));
+        return { success: true, data: correction };
       } catch (err: any) {
-        return {
-          success: false,
-          error: extractApiError(err, 'Failed to submit attendance correction.'),
-        };
+        return { success: false, error: extractApiError(err, 'Failed to submit attendance correction.') };
       }
     },
 
     reviewAttendanceCorrection: async (correctionId, status) => {
-      const target = get().attendanceCorrections.find((c) => c.correctionId === correctionId);
-      if (
-        status === 'APPROVED' &&
-        target &&
-        target.attendanceId &&
-        Number(target.attendanceId) < 1000000000
-      ) {
-        const formatIso = (dateStr: string, timeStr: string) => {
-          const t = timeStr.trim();
-          if (t.includes('T')) return t;
-          const ampmMatch = t.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-          if (ampmMatch) {
-            let h = parseInt(ampmMatch[1], 10);
-            const m = ampmMatch[2];
-            const mer = ampmMatch[3]?.toUpperCase();
-            if (mer === 'PM' && h < 12) h += 12;
-            if (mer === 'AM' && h === 12) h = 0;
-            return `${dateStr}T${String(h).padStart(2, '0')}:${m}:00`;
-          }
-          return `${dateStr}T08:00:00`;
-        };
-        await attendanceApi
-          .requestCorrection(target.attendanceId, {
-            checkIn: formatIso(target.attendanceDate, target.requestedCheckIn),
-            checkOut: target.requestedCheckOut
-              ? formatIso(target.attendanceDate, target.requestedCheckOut)
-              : undefined,
-            status: 'PRESENT',
-            lateMinutes: 0,
-            reason: target.reason || 'Approved attendance correction',
-          })
-          .catch(() => {});
+      try {
+        const reviewed = await attendanceRequestApi.review(correctionId, status);
+        set(state => ({
+          attendanceCorrections: state.attendanceCorrections.map(c => c.correctionId === correctionId ? reviewed : c),
+          pendingActions: state.pendingActions.filter(a => a.id !== 'corr-' + correctionId),
+        }));
+        await get().syncWithGateway();
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: extractApiError(err, 'Failed to review attendance correction.') };
       }
-
-      set((state) => {
-        if (!target) return state;
-
-        const updatedCorrections = state.attendanceCorrections.map((c) =>
-          c.correctionId === correctionId
-            ? {
-                ...c,
-                status,
-                reviewedBy: state.currentUser.fullName,
-                reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-              }
-            : c
-        );
-
-        let updatedAttendance = state.attendance;
-        if (status === 'APPROVED') {
-          updatedAttendance = state.attendance.map((a) =>
-            a.attendanceId === target.attendanceId
-              ? {
-                  ...a,
-                  checkIn: target.requestedCheckIn,
-                  checkOut: target.requestedCheckOut,
-                  status: 'PRESENT' as const,
-                  lateMinutes: 0,
-                }
-              : a
-          );
-        }
-
-        return {
-          attendanceCorrections: updatedCorrections,
-          attendance: updatedAttendance,
-          pendingActions: state.pendingActions.filter(
-            (a) => a.id !== `corr-${correctionId}` && !a.code.includes(String(correctionId))
-          ),
-        };
-      });
-      return { success: true };
     },
 
     // ==========================================
@@ -1191,7 +1096,7 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
               : updates.status === 'On Leave'
               ? 'ON_LEAVE'
               : updates.status === 'Terminated'
-              ? 'TERMINATED'
+              ? 'INACTIVE'
               : updates.status === 'Probation'
               ? 'PROBATION'
               : String(updates.status).toUpperCase();
@@ -1239,7 +1144,7 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
 
     deleteEmployee: async (id) => {
       try {
-        await employeeApi.updateStatus(id, 'TERMINATED');
+        await employeeApi.updateStatus(id, 'INACTIVE');
         set((state) => {
           const targetEmp = state.employees.find((e) => e.employeeId === id);
           return {
@@ -1444,14 +1349,13 @@ export const useHrmsStore = create<HrmsState>((set, get) => {
     },
 
     markPayrollPaid: async (recordId) => {
-      set((state) => ({
-        payroll: state.payroll.map((p) =>
-          p.recordId === recordId
-            ? { ...p, status: 'PAID' as const, paidDate: getLocalDateStr() }
-            : p
-        ),
-      }));
-      return { success: true };
+      try {
+        const saved = await payrollApi.markPaid(recordId);
+        set(state => ({ payroll: state.payroll.map(p => p.recordId === recordId ? { ...p, status: saved.status, paidDate: saved.paidDate } : p) }));
+        return { success: true };
+      } catch (err: any) {
+        return { success: false, error: extractApiError(err, 'Failed to mark payroll paid.') };
+      }
     },
   };
 });

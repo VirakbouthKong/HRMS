@@ -405,6 +405,12 @@ export const attendanceApi = {
   },
 };
 
+export const attendanceRequestApi = {
+  getAll: async (): Promise<AttendanceCorrection[]> => (await apiClient.get('/api/attendance-requests')).data,
+  submit: async (data: { attendanceId: number; checkIn: string; checkOut?: string; reason: string }): Promise<AttendanceCorrection> => (await apiClient.post('/api/attendance-requests', data)).data,
+  review: async (id: number, status: 'APPROVED' | 'REJECTED'): Promise<AttendanceCorrection> => (await apiClient.patch('/api/attendance-requests/' + id, { status })).data,
+};
+
 export const attendanceCorrectionApi = {
   correct: attendanceApi.requestCorrection,
   getHistory: attendanceApi.getCorrectionHistory,
@@ -464,6 +470,7 @@ export const leaveApi = {
 // ==========================================
 
 export const payrollApi = {
+  markPaid: async (id: number): Promise<any> => (await apiClient.patch('/api/payroll/' + id + '/paid')).data,
   getAll: async (period?: string): Promise<PayrollRecord[]> => {
     const targetPeriod = period || new Date().toISOString().substring(0, 7);
     const res = await apiClient.get<PayrollRecord[]>('/api/payroll', {
