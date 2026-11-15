@@ -50,9 +50,9 @@ export const AttendanceSummaryChart: React.FC = () => {
     datasets: [
       {
         data: [onTimeCount, lateCount, absentLeaveCount],
-        backgroundColor: ['#10B981', '#F59E0B', '#6366F1'],
-        borderRadius: 8,
-        borderSkipped: false,
+        backgroundColor: ['#0A8F72', '#C46A00', '#6250D6'],
+        borderRadius: 4,
+        borderSkipped: 'start' as const,
         barThickness: 32,
       },
     ],
@@ -81,7 +81,7 @@ export const AttendanceSummaryChart: React.FC = () => {
           font: {
             size: 11,
           },
-          color: '#64748B',
+          color: '#5F6B65',
         },
       },
       y: {
@@ -92,29 +92,29 @@ export const AttendanceSummaryChart: React.FC = () => {
           font: {
             size: 10,
           },
-          color: '#94A3B8',
+          color: '#5F6B65',
         },
         grid: {
-          color: '#F1F5F9',
+          color: '#E3E6E1',
         },
       },
     },
   };
 
   const legendItems = [
-    { label: onTimeLabel, count: onTimeCount, color: '#10B981' },
-    { label: lateLabel, count: lateCount, color: '#F59E0B' },
-    { label: absentLabel, count: absentLeaveCount, color: '#6366F1' },
+    { label: onTimeLabel, count: onTimeCount, color: '#0A8F72' },
+    { label: lateLabel, count: lateCount, color: '#C46A00' },
+    { label: absentLabel, count: absentLeaveCount, color: '#6250D6' },
   ];
 
   return (
-    <div className="bg-white/90 backdrop-blur-md rounded-2xl p-6 border border-white/80 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col h-full justify-between">
+    <div className="bg-white rounded-xl p-6 border border-slate-200 flex flex-col h-full justify-between">
       <div className="flex items-center justify-between mb-2">
         <div>
           <h2 className="text-sm font-bold text-slate-900 tracking-tight">{t('attChartTitle')}</h2>
-          <p className="text-[11px] text-slate-400 mt-0.5">{t('attChartSub')}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{t('attChartSub')}</p>
         </div>
-        <span className="text-[11px] font-mono font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+        <span className="text-xs font-mono font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
           {t('recordsSuffix', { count: totalLogs })}
         </span>
       </div>
@@ -125,7 +125,7 @@ export const AttendanceSummaryChart: React.FC = () => {
             <Clock weight="duotone" className="w-6 h-6 text-slate-400" />
           </div>
           <p className="text-xs font-semibold text-slate-700">{t('noAttRecords')}</p>
-          <p className="text-[11px] text-slate-400 mt-1 max-w-[240px] leading-relaxed">
+          <p className="text-xs text-slate-400 mt-1 max-w-[240px] leading-relaxed">
             {t('noAttRecordsDesc')}
           </p>
         </div>
