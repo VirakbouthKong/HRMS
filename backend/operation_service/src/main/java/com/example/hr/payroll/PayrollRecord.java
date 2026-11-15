@@ -12,6 +12,14 @@ import java.time.LocalDate;
 @Table(name = "tbl_payroll_record")
 public class PayrollRecord {
 
+    @Column(name = "payment_status", nullable = false)
+    private String status = "PROCESSED";
+    @Column(name = "paid_date")
+    private LocalDate paidDate;
+    public String getStatus() { return status; }
+    public LocalDate getPaidDate() { return paidDate; }
+    public void markPaid() { status = "PAID"; if (paidDate == null) paidDate = LocalDate.now(java.time.ZoneId.of("Asia/Phnom_Penh")); }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer payrollId;

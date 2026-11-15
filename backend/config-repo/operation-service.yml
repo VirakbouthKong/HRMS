@@ -8,6 +8,9 @@ spring:
     username: ${SPRING_DATASOURCE_USERNAME}
     password: ${SPRING_DATASOURCE_PASSWORD}
   jpa:
+    properties:
+      hibernate:
+        default_schema: public
     hibernate:
       ddl-auto: none   # same as before the Config Server (Operation's .env had none)
     open-in-view: false

@@ -18,10 +18,12 @@ public class LeaveService {
 
     private final LeaveRequestRepository leaveRequestRepository;
     private final EmployeeRepository employeeRepository;
+    private final LeaveTypeRepository leaveTypeRepository;
 
-    public LeaveService(LeaveRequestRepository leaveRequestRepository, EmployeeRepository employeeRepository) {
+    public LeaveService(LeaveRequestRepository leaveRequestRepository, EmployeeRepository employeeRepository, LeaveTypeRepository leaveTypeRepository) {
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
+        this.leaveTypeRepository = leaveTypeRepository;
     }
 
     public LeaveResponse submitLeave(Integer employeeId, LeaveSubmitRequest request) {
@@ -40,6 +42,14 @@ public class LeaveService {
                 request.reason()
         );
 
+        String code = request.leaveType().trim().toUpperCase(java.util.Locale.ROOT).replace(" LEAVE", "");
+        if (code.equals("CASUAL")) code = "PERSONAL";
+        LeaveType type = leaveTypeRepository.findByCodeIgnoreCase(code)
+                .filter(LeaveType::isActive).orElseThrow(() -> new IllegalArgumentException("Unknown or inactive leave type"));
+        leaveRequest.setTypeDefinition(type);
+        long workingDays = leaveTypeRepository.workingDays(request.startDate(), request.endDate());
+        if (workingDays == 0) throw new IllegalArgumentException("The request must include at least one working day");
+        leaveRequest.setWorkingDays(workingDays);
         LeaveRequest savedLeave = leaveRequestRepository.save(leaveRequest);
         return toResponse(savedLeave);
     }
@@ -68,7 +78,7 @@ public class LeaveService {
     public LeaveResponse approveLeave(Integer leaveId, Integer approverId) {
         LeaveRequest leaveRequest = leaveRequestRepository.findById(leaveId)
                 .orElseThrow(() -> new LeaveNotFoundException(leaveId));
-        Employee approver = employeeRepository.findById(approverId)
+        Employee approver = approverId == null ? null : employeeRepository.findById(approverId)
                 .orElseThrow(() -> new EmployeeNotFoundException(approverId));
 
         leaveRequest.approve(approver);
@@ -78,7 +88,7 @@ public class LeaveService {
     public LeaveResponse rejectLeave(Integer leaveId, Integer approverId) {
         LeaveRequest leaveRequest = leaveRequestRepository.findById(leaveId)
                 .orElseThrow(() -> new LeaveNotFoundException(leaveId));
-        Employee approver = employeeRepository.findById(approverId)
+        Employee approver = approverId == null ? null : employeeRepository.findById(approverId)
                 .orElseThrow(() -> new EmployeeNotFoundException(approverId));
 
         leaveRequest.reject(approver);
@@ -99,7 +109,7 @@ public class LeaveService {
 
     private LeaveResponse toResponse(LeaveRequest leave) {
         Integer approvedById = null;
-        String approvedByName = null;
+        String approvedByName = leave.getDecidedByUsername();
 
         if (leave.getApprovedBy() != null) {
             approvedById = leave.getApprovedBy().getEmployeeId();

@@ -57,13 +57,13 @@ public class LeaveController {
     @PatchMapping("/{leaveId}/approve")
     @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF')")
     public LeaveResponse approveLeave(@PathVariable Integer leaveId) {
-        return leaveService.approveLeave(leaveId, currentEmployeeId());
+        return leaveService.approveLeave(leaveId, com.example.hr.common.security.CurrentEmployee.idOrNull());
     }
 
     @PatchMapping("/{leaveId}/reject")
     @PreAuthorize("hasAnyRole('ADMIN','HR_MANAGER','HR_STAFF')")
     public LeaveResponse rejectLeave(@PathVariable Integer leaveId) {
-        return leaveService.rejectLeave(leaveId, currentEmployeeId());
+        return leaveService.rejectLeave(leaveId, com.example.hr.common.security.CurrentEmployee.idOrNull());
     }
 
     @PatchMapping("/{leaveId}/cancel")

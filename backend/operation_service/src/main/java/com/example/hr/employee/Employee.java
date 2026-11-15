@@ -21,6 +21,18 @@ import java.time.LocalDate;
 @Table(name = "tbl_employee")
 public class Employee {
 
+    @Column(name = "employee_code", nullable = false, unique = true, length = 20)
+    private String employeeCode;
+
+    @Column(name = "hire_date", nullable = false)
+    private LocalDate hireDate;
+
+    @jakarta.persistence.PrePersist
+    void initializeEmployment() {
+        if (employeeCode == null) employeeCode = "EMP-" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        if (hireDate == null) hireDate = LocalDate.now(java.time.ZoneId.of("Asia/Phnom_Penh"));
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "employee_id")
