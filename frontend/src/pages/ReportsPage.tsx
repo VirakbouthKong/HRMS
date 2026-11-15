@@ -13,6 +13,7 @@ import { LeaveSummaryChart } from '../components/dashboard/LeaveSummaryChart';
 import { AttendanceSummaryChart } from '../components/dashboard/AttendanceSummaryChart';
 import { MetricCard } from '../components/dashboard/MetricCard';
 import { DashboardCard } from '../components/dashboard/DashboardCard';
+import { FilteredReports } from '../components/reports/FilteredReports';
 import { hasPermission } from '../utils/rbac';
 import { useI18n } from '../i18n/useI18n';
 
@@ -205,6 +206,9 @@ export const ReportsPage: React.FC = () => {
           </table>
         </div>
       </DashboardCard>
+
+      {/* 5. Filtered reports (report service) */}
+      <FilteredReports />
     </div>
   );
 };
