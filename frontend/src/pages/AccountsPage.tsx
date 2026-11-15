@@ -45,6 +45,7 @@ const generatePassword = () => {
 };
 
 type FormState = {
+  departmentId: number | '';
   employeeId: number | '';
   userName: string;
   email: string;
@@ -62,7 +63,7 @@ const primaryBtn =
   'inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 focus-visible:outline-none';
 
 export const AccountsPage: React.FC = () => {
-  const { employees, currentUser } = useHrmsStore();
+  const { employees, departments, currentUser } = useHrmsStore();
   const { t, language } = useI18n();
 
   const [accounts, setAccounts] = useState<UserAccountSummary[]>([]);
@@ -77,6 +78,7 @@ export const AccountsPage: React.FC = () => {
   const [mode, setMode] = useState<'create' | 'edit' | null>(null);
   const [editing, setEditing] = useState<UserAccountSummary | null>(null);
   const [form, setForm] = useState<FormState>({
+    departmentId: '',
     employeeId: '',
     userName: '',
     email: '',
@@ -127,6 +129,16 @@ export const AccountsPage: React.FC = () => {
     return !linkedEmployeeIds.has(e.employeeId) && s !== 'TERMINATED' && s !== 'INACTIVE';
   });
 
+  const withoutLoginByDept = (departmentId: number) =>
+    employeesWithoutLogin.filter((e) => e.departmentId === departmentId);
+  const sortedDepartments = [...departments].sort((a, b) => a.departmentName.localeCompare(b.departmentName));
+  const deptEmployees =
+    form.departmentId === ''
+      ? []
+      : withoutLoginByDept(Number(form.departmentId)).sort((a, b) =>
+          `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`)
+        );
+
   const activeCount = accounts.filter((a) => isActive(a.status)).length;
   const inactiveCount = accounts.length - activeCount;
   const firstLoginCount = accounts.filter((a) => a.isFirstLogin).length;
@@ -166,11 +178,11 @@ export const AccountsPage: React.FC = () => {
   };
 
   const openCreate = () => {
-    const first = employeesWithoutLogin[0];
     setForm({
-      employeeId: first ? first.employeeId : '',
-      userName: first ? suggestUserName(first.employeeId) : '',
-      email: first?.email || '',
+      departmentId: '',
+      employeeId: '',
+      userName: '',
+      email: '',
       roleId: defaultRoleId,
       status: 'ACTIVE',
       password: generatePassword(),
@@ -184,6 +196,7 @@ export const AccountsPage: React.FC = () => {
 
   const openEdit = (account: UserAccountSummary) => {
     setForm({
+      departmentId: '',
       employeeId: account.employeeId ?? '',
       userName: account.userName,
       email: account.email,
@@ -194,6 +207,11 @@ export const AccountsPage: React.FC = () => {
     setEditing(account);
     setFormError(null);
     setMode('edit');
+  };
+
+  const pickDepartment = (id: number) => {
+    // Changing department clears the employee and the details filled in from them.
+    setForm((f) => ({ ...f, departmentId: id, employeeId: '', userName: '', email: '' }));
   };
 
   const pickEmployee = (id: number) => {
@@ -216,7 +234,12 @@ export const AccountsPage: React.FC = () => {
     setFormError(null);
     const userName = form.userName.trim();
     const email = form.email.trim();
-    if (!userName || !email || form.roleId === '' || (mode === 'create' && form.employeeId === '')) {
+    if (
+      !userName ||
+      !email ||
+      form.roleId === '' ||
+      (mode === 'create' && (form.departmentId === '' || form.employeeId === ''))
+    ) {
       setFormError(t('acRequiredFields'));
       return;
     }
@@ -460,32 +483,60 @@ export const AccountsPage: React.FC = () => {
             </p>
           )}
 
-          {mode === 'create' && (
-            <div>
-              <label htmlFor="acEmployee" className={labelCls}>
-                {t('colEmployee')}
-              </label>
-              {employeesWithoutLogin.length === 0 ? (
-                <p className="text-sm text-slate-500">{t('acNoEmployeesLeft')}</p>
-              ) : (
-                <select
-                  id="acEmployee"
-                  value={form.employeeId}
-                  onChange={(e) => pickEmployee(Number(e.target.value))}
-                  className={inputCls}
-                >
-                  <option value="" disabled>
-                    {t('acChooseEmployee')}
-                  </option>
-                  {employeesWithoutLogin.map((e) => (
-                    <option key={e.employeeId} value={e.employeeId}>
-                      {e.firstName} {e.lastName} · {e.departmentName}
+          {mode === 'create' &&
+            (employeesWithoutLogin.length === 0 ? (
+              <p className="text-sm text-slate-500">{t('acNoEmployeesLeft')}</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="acDepartment" className={labelCls}>
+                    {t('colDepartment')}
+                  </label>
+                  <select
+                    id="acDepartment"
+                    value={form.departmentId}
+                    onChange={(e) => pickDepartment(Number(e.target.value))}
+                    className={inputCls}
+                  >
+                    <option value="" disabled>
+                      {t('acChooseDepartment')}
                     </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
+                    {sortedDepartments.map((d) => {
+                      const count = withoutLoginByDept(d.departmentId).length;
+                      return (
+                        <option key={d.departmentId} value={d.departmentId} disabled={count === 0}>
+                          {count === 0
+                            ? t('acDeptAllHaveLogin', { name: d.departmentName })
+                            : t('acDeptOption', { name: d.departmentName, count })}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="acEmployee" className={labelCls}>
+                    {t('colEmployee')}
+                  </label>
+                  <select
+                    id="acEmployee"
+                    value={form.employeeId}
+                    onChange={(e) => pickEmployee(Number(e.target.value))}
+                    disabled={form.departmentId === ''}
+                    className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed`}
+                  >
+                    <option value="" disabled>
+                      {form.departmentId === '' ? t('acPickDepartmentFirst') : t('acChooseEmployee')}
+                    </option>
+                    {deptEmployees.map((e) => (
+                      <option key={e.employeeId} value={e.employeeId}>
+                        {e.firstName} {e.lastName}
+                        {e.jobTitle ? ` · ${e.jobTitle}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

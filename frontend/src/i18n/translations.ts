@@ -105,6 +105,11 @@ export const translations = {
     dashJobRunning: 'Running',
     dashNoRuns: 'No scheduled jobs have run yet.',
     dashOpenAutomations: 'Open automations',
+    // User accounts: department-first picker
+    acChooseDepartment: 'Choose a department',
+    acPickDepartmentFirst: 'Choose a department first',
+    acDeptOption: '{name} ({count} without a login)',
+    acDeptAllHaveLogin: '{name} (everyone has a login)',
     // User accounts page (admin)
     navAccounts: 'User accounts',
     secTitleAccounts: 'User accounts',
@@ -1000,6 +1005,11 @@ export const translations = {
     dashJobRunning: 'កំពុងដំណើរការ',
     dashNoRuns: 'មិនទាន់មានការងារកំណត់ពេលដំណើរការនៅឡើយទេ។',
     dashOpenAutomations: 'បើកស្វ័យប្រវត្តិកម្ម',
+    // User accounts: department-first picker
+    acChooseDepartment: 'ជ្រើសរើសនាយកដ្ឋាន',
+    acPickDepartmentFirst: 'សូមជ្រើសរើសនាយកដ្ឋានជាមុនសិន',
+    acDeptOption: '{name} ({count} គ្មានគណនី)',
+    acDeptAllHaveLogin: '{name} (គ្រប់គ្នាមានគណនី)',
     // User accounts page (admin)
     navAccounts: 'គណនីអ្នកប្រើ',
     secTitleAccounts: 'គណនីអ្នកប្រើ',
