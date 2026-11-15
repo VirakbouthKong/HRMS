@@ -15,10 +15,12 @@ public class ContractExpiryJob implements CronJob {
 
     private final OperationsServiceClient operationsServiceClient;
     private final JobExecutionService executionService;
+    private final ReportDeliveryService reports;
 
-    public ContractExpiryJob(OperationsServiceClient operationsServiceClient, JobExecutionService executionService) {
+    public ContractExpiryJob(OperationsServiceClient operationsServiceClient, JobExecutionService executionService, ReportDeliveryService reports) {
         this.operationsServiceClient = operationsServiceClient;
         this.executionService = executionService;
+        this.reports = reports;
     }
 
     @Override
@@ -29,6 +31,7 @@ public class ContractExpiryJob implements CronJob {
             logger.info("Executing Contract Expiry Alerts Job...");
             // Check contract expiring 30 days
             operationsServiceClient.triggerContractExpiryCheck(30);
+            reports.contractReport(30);
             logger.info("Contract Expiry Alerts Job completed successfully.");
             executionService.finishJob(execution);
         } catch (Exception e) {

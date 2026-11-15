@@ -3,6 +3,13 @@ server:
   port: 8084
 
 spring:
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    properties:
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -23,3 +30,8 @@ operation:
 internal:
   api:
     key: ${INTERNAL_API_KEY}
+
+app:
+  reports:
+    recipient: ${REPORT_RECIPIENT:hr-reports@hrms.local}
+    sender: ${REPORT_SENDER:no-reply@hrms.local}

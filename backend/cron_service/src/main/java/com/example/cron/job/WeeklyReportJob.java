@@ -13,9 +13,11 @@ public class WeeklyReportJob implements CronJob {
     private static final Logger log = LoggerFactory.getLogger(WeeklyReportJob.class);
     private static final String JOB_NAME = "WeeklyReportJob";
     private final JobExecutionService executionService;
+    private final ReportDeliveryService reports;
 
-    public WeeklyReportJob(JobExecutionService executionService) {
+    public WeeklyReportJob(JobExecutionService executionService, ReportDeliveryService reports) {
         this.executionService = executionService;
+        this.reports = reports;
     }
 
     @Override
@@ -31,9 +33,7 @@ public class WeeklyReportJob implements CronJob {
         try {
             log.info("Generating weekly report...");
             
-            // TODO: generate report and email it
-            // Simulate work
-            Thread.sleep(2000); 
+            reports.weeklyReport();
             
             log.info("Weekly report generated successfully.");
             executionService.finishJob(execution);
