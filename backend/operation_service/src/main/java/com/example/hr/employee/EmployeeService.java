@@ -88,6 +88,14 @@ public class EmployeeService {
         return toResponse(findMine(employeeId));
     }
 
+    /** PATCH /api/employees/me/contact: only the caller's own contact details, nothing else. */
+    public EmployeeResponse updateMyContact(Integer employeeId, com.example.hr.employee.dto.ContactUpdateRequest request) {
+        Employee employee = findMine(employeeId);
+        employee.updateContact(request.phoneNumber(), request.address(), request.emergencyContactName(),
+                request.emergencyContactPhone(), request.emergencyContactRelation());
+        return toResponse(employeeRepository.save(employee));
+    }
+
     public EmployeeResponse updateEmployee(Integer employeeId, EmployeeRequest request) {
         Employee employee = find(employeeId);
 
@@ -201,7 +209,12 @@ public class EmployeeService {
                 employee.getStatus(),
                 employee.getDepartment().getDepartmentId(),
                 employee.getDepartment().getDepartmentName(),
-                employee.getJob() == null ? null : employee.getJob().getJobTitle()
+                employee.getJob() == null ? null : employee.getJob().getJobTitle(),
+                employee.getPhoneNumber(),
+                employee.getAddress(),
+                employee.getEmergencyContactName(),
+                employee.getEmergencyContactPhone(),
+                employee.getEmergencyContactRelation()
         );
     }
 }

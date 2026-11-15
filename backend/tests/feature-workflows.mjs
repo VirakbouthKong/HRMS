@@ -287,6 +287,14 @@ await group('Evergreen UI features',async()=>{
   await api('GET',`/api/employees/${empId}/job-history`,undefined,hr.token,[200],'HR reads an employee job history');
   const mine=await api('GET','/api/employees/me/job-history',undefined,e.token,[200],'Employee reads own job history');
   check('Own job history returned',Array.isArray(mine.data)&&mine.data.length>=1);
+  // Self-service contact details: own record only, HR-owned fields untouched
+  const contact={phoneNumber:'+855 12 345 678',address:'Phnom Penh',emergencyContactName:'QA Parent',emergencyContactPhone:'012 999 888',emergencyContactRelation:'Parent'};
+  const mineContact=await api('PATCH','/api/employees/me/contact',contact,e.token,[200],'Employee updates own contact details');
+  check('Contact details saved, HR fields unchanged',mineContact.data?.phoneNumber===contact.phoneNumber&&mineContact.data?.email===e.email&&mineContact.data?.firstName==='QA');
+  await api('PATCH','/api/employees/me/contact',{...contact,phoneNumber:'call me maybe'},e.token,[400],'Invalid phone number rejected');
+  await api('PATCH',`/api/employees/${empId}`,{...e.request,phoneNumber:'000'},e.token,[403],'Employee cannot edit employee records');
+  const asHr=await api('GET',`/api/employees/${empId}`,undefined,hr.token,[200],'HR sees updated contact details');
+  check('HR view shows the new phone number',asHr.data?.phoneNumber===contact.phoneNumber);
   // Job title editing: HR manager yes, employee no
   const edited=`QA Senior Edited ${suffix}`;
   await api('PATCH',`/api/jobs/${state.job2.jobId}`,{departmentId:state.dept.departmentId,jobTitle:edited,description:'Edited by HR'},hr.token,[200],'HR manager edits job title');
